@@ -1,4 +1,5 @@
 // @flow
+import uuid from "uuid";
 import {
   Share,
   Team,
@@ -9,8 +10,9 @@ import {
   Group,
   GroupUser,
   Attachment,
+  Authentication,
+  Integration,
 } from "../models";
-import uuid from "uuid";
 
 let count = 0;
 
@@ -24,7 +26,10 @@ export async function buildShare(overrides: Object = {}) {
     overrides.userId = user.id;
   }
 
-  return Share.create(overrides);
+  return Share.create({
+    published: true,
+    ...overrides,
+  });
 }
 
 export function buildTeam(overrides: Object = {}) {
@@ -65,6 +70,33 @@ export async function buildUser(overrides: Object = {}) {
   });
 }
 
+export async function buildIntegration(overrides: Object = {}) {
+  if (!overrides.teamId) {
+    const team = await buildTeam();
+    overrides.teamId = team.id;
+  }
+
+  const user = await buildUser({ teamId: overrides.teamId });
+
+  const authentication = await Authentication.create({
+    service: "slack",
+    userId: user.id,
+    teamId: user.teamId,
+    token: "fake-access-token",
+    scopes: ["example", "scopes", "here"],
+  });
+
+  return Integration.create({
+    type: "post",
+    service: "slack",
+    settings: {
+      serviceTeamId: "slack_team_id",
+    },
+    authenticationId: authentication.id,
+    ...overrides,
+  });
+}
+
 export async function buildCollection(overrides: Object = {}) {
   count++;
 
@@ -81,8 +113,7 @@ export async function buildCollection(overrides: Object = {}) {
   return Collection.create({
     name: `Test Collection ${count}`,
     description: "Test collection description",
-    creatorId: overrides.userId,
-    type: "atlas",
+    createdById: overrides.userId,
     ...overrides,
   });
 }

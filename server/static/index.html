@@ -1,11 +1,18 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <title>Outline</title>
-    <meta name="slack-app-id" content="<%= SLACK_APP_ID %>" />
+    <meta name="slack-app-id" content="//inject-slack-app-id//" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="shortcut icon" type="image/png" href="favicon-32.png" sizes="32x32" />
-    <link rel="manifest" href="/manifest.json" />
+    <meta name="description" content="A modern team knowledge base for your internal documentation, product specs, support answers, meeting notes, onboarding, &amp; more…">
+    //inject-prefetch//
+    <link
+      rel="shortcut icon"
+      type="image/png"
+      href="/favicon-32.png"
+      sizes="32x32"
+    />
+    <link rel="manifest" href="/manifest.json" crossorigin="use-credentials" />
     <link
       rel="search"
       type="application/opensearchdescription+xml"
@@ -31,28 +38,15 @@
       }
     </style>
   </head>
+
   <body>
     <div id="root"></div>
-    <script
-      src="https://browser.sentry-cdn.com/5.12.1/bundle.min.js"
-      integrity="sha384-y+an4eARFKvjzOivf/Z7JtMJhaN6b+lLQ5oFbBbUwZNNVir39cYtkjW1r6Xjbxg3"
-      crossorigin="anonymous"
-    >
+    <script>
+      //inject-env//
     </script>
     <script>
-      Sentry.init({
-        dsn: '<%= SENTRY_DSN %>',
-        ignoreErrors: [
-          'AuthorizationError',
-          'NetworkError',
-          'NotFoundError',
-          'OfflineError',
-          'UpdateRequiredError',
-        ],
-      });
-
-      if (window.localStorage.getItem("theme") === "dark") {
-        window.document.querySelector('#root').style.background = "#111319";
+      if (window.localStorage && window.localStorage.getItem("theme") === "dark") {
+        window.document.querySelector("#root").style.background = "#111319";
       }
     </script>
   </body>

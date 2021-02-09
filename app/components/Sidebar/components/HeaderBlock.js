@@ -1,39 +1,39 @@
 // @flow
-import * as React from "react";
-import styled, { withTheme } from "styled-components";
 import { ExpandedIcon } from "outline-icons";
-import Flex from "shared/components/Flex";
-import TeamLogo from "shared/components/TeamLogo";
+import * as React from "react";
+import styled from "styled-components";
+import Flex from "components/Flex";
+import TeamLogo from "components/TeamLogo";
 
-type Props = {
+type Props = {|
   teamName: string,
-  subheading: string,
+  subheading: React.Node,
   showDisclosure?: boolean,
+  onClick: (event: SyntheticEvent<>) => void,
   logoUrl: string,
-  theme: Object,
-};
+|};
 
-function HeaderBlock({
-  showDisclosure,
-  teamName,
-  subheading,
-  logoUrl,
-  theme,
-  ...rest
-}: Props) {
-  return (
-    <Header justify="flex-start" align="center" {...rest}>
-      <TeamLogo alt={`${teamName} logo`} src={logoUrl} />
-      <Flex align="flex-start" column>
-        <TeamName showDisclosure>
-          {teamName}{" "}
-          {showDisclosure && <StyledExpandedIcon color={theme.text} />}
-        </TeamName>
-        <Subheading>{subheading}</Subheading>
-      </Flex>
-    </Header>
-  );
-}
+const HeaderBlock = React.forwardRef<Props, any>(
+  ({ showDisclosure, teamName, subheading, logoUrl, ...rest }: Props, ref) => (
+    <Wrapper>
+      <Header justify="flex-start" align="center" ref={ref} {...rest}>
+        <TeamLogo
+          alt={`${teamName} logo`}
+          src={logoUrl}
+          width={38}
+          height={38}
+        />
+        <Flex align="flex-start" column>
+          <TeamName showDisclosure>
+            {teamName}{" "}
+            {showDisclosure && <StyledExpandedIcon color="currentColor" />}
+          </TeamName>
+          <Subheading>{subheading}</Subheading>
+        </Flex>
+      </Header>
+    </Wrapper>
+  )
+);
 
 const StyledExpandedIcon = styled(ExpandedIcon)`
   position: absolute;
@@ -46,7 +46,8 @@ const Subheading = styled.div`
   font-size: 11px;
   text-transform: uppercase;
   font-weight: 500;
-  color: ${props => props.theme.sidebarText};
+  white-space: nowrap;
+  color: ${(props) => props.theme.sidebarText};
 `;
 
 const TeamName = styled.div`
@@ -54,15 +55,25 @@ const TeamName = styled.div`
   padding-left: 10px;
   padding-right: 24px;
   font-weight: 600;
-  color: ${props => props.theme.text};
+  color: ${(props) => props.theme.text};
+  white-space: nowrap;
   text-decoration: none;
   font-size: 16px;
 `;
 
-const Header = styled(Flex)`
+const Wrapper = styled.div`
   flex-shrink: 0;
-  padding: 16px 24px;
-  position: relative;
+  overflow: hidden;
+`;
+
+const Header = styled.button`
+  display: flex;
+  align-items: center;
+  padding: 20px 24px;
+  background: none;
+  line-height: inherit;
+  border: 0;
+  margin: 0;
   cursor: pointer;
   width: 100%;
 
@@ -73,4 +84,4 @@ const Header = styled(Flex)`
   }
 `;
 
-export default withTheme(HeaderBlock);
+export default HeaderBlock;

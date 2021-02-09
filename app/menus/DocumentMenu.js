@@ -1,245 +1,348 @@
 // @flow
+import { observer } from "mobx-react";
 import * as React from "react";
-import { Redirect } from "react-router-dom";
-import { observable } from "mobx";
-import { inject, observer } from "mobx-react";
-
+import { useTranslation } from "react-i18next";
+import { useHistory } from "react-router-dom";
+import { useMenuState, MenuButton } from "reakit/Menu";
+import styled from "styled-components";
 import Document from "models/Document";
-import UiStore from "stores/UiStore";
-import AuthStore from "stores/AuthStore";
-import CollectionStore from "stores/CollectionsStore";
-import PoliciesStore from "stores/PoliciesStore";
+import DocumentDelete from "scenes/DocumentDelete";
+import DocumentShare from "scenes/DocumentShare";
+import DocumentTemplatize from "scenes/DocumentTemplatize";
+import CollectionIcon from "components/CollectionIcon";
+import ContextMenu from "components/ContextMenu";
+import OverflowMenuButton from "components/ContextMenu/OverflowMenuButton";
+import Template from "components/ContextMenu/Template";
+import Flex from "components/Flex";
+import Modal from "components/Modal";
+import useStores from "hooks/useStores";
 import {
-  documentUrl,
-  documentMoveUrl,
-  documentEditUrl,
   documentHistoryUrl,
+  documentMoveUrl,
+  documentUrl,
+  editDocumentUrl,
   newDocumentUrl,
 } from "utils/routeHelpers";
-import { DropdownMenu, DropdownMenuItem } from "components/DropdownMenu";
 
-type Props = {
-  ui: UiStore,
-  auth: AuthStore,
-  position?: "left" | "right" | "center",
+type Props = {|
   document: Document,
-  collections: CollectionStore,
-  policies: PoliciesStore,
   className: string,
   isRevision?: boolean,
   showPrint?: boolean,
+  modal?: boolean,
   showToggleEmbeds?: boolean,
   showPin?: boolean,
+  label?: (any) => React.Node,
   onOpen?: () => void,
   onClose?: () => void,
-};
+|};
 
-@observer
-class DocumentMenu extends React.Component<Props> {
-  @observable redirectTo: ?string;
+function DocumentMenu({
+  document,
+  isRevision,
+  className,
+  modal = true,
+  showToggleEmbeds,
+  showPrint,
+  showPin,
+  label,
+  onOpen,
+  onClose,
+}: Props) {
+  const { policies, collections, auth, ui } = useStores();
+  const menu = useMenuState({ modal });
+  const history = useHistory();
+  const { t } = useTranslation();
+  const [renderModals, setRenderModals] = React.useState(false);
+  const [showDeleteModal, setShowDeleteModal] = React.useState(false);
+  const [showTemplateModal, setShowTemplateModal] = React.useState(false);
+  const [showShareModal, setShowShareModal] = React.useState(false);
 
-  componentDidUpdate() {
-    this.redirectTo = undefined;
-  }
-
-  handleNewChild = (ev: SyntheticEvent<>) => {
-    const { document } = this.props;
-    this.redirectTo = newDocumentUrl(document.collectionId, document.id);
-  };
-
-  handleDelete = (ev: SyntheticEvent<>) => {
-    const { document } = this.props;
-    this.props.ui.setActiveModal("document-delete", { document });
-  };
-
-  handleDocumentHistory = () => {
-    if (this.props.isRevision) {
-      this.redirectTo = documentUrl(this.props.document);
-    } else {
-      this.redirectTo = documentHistoryUrl(this.props.document);
+  const handleOpen = React.useCallback(() => {
+    setRenderModals(true);
+    if (onOpen) {
+      onOpen();
     }
-  };
+  }, [onOpen]);
 
-  handleMove = (ev: SyntheticEvent<>) => {
-    this.redirectTo = documentMoveUrl(this.props.document);
-  };
+  const handleDuplicate = React.useCallback(
+    async (ev: SyntheticEvent<>) => {
+      const duped = await document.duplicate();
 
-  handleEdit = (ev: SyntheticEvent<>) => {
-    this.redirectTo = documentEditUrl(this.props.document);
-  };
+      // when duplicating, go straight to the duplicated document content
+      history.push(duped.url);
+      ui.showToast(t("Document duplicated"), { type: "success" });
+    },
+    [ui, t, history, document]
+  );
 
-  handleDuplicate = async (ev: SyntheticEvent<>) => {
-    const duped = await this.props.document.duplicate();
+  const handleArchive = React.useCallback(
+    async (ev: SyntheticEvent<>) => {
+      await document.archive();
+      ui.showToast(t("Document archived"), { type: "success" });
+    },
+    [ui, t, document]
+  );
 
-    // when duplicating, go straight to the duplicated document content
-    this.redirectTo = duped.url;
-    this.props.ui.showToast("Document duplicated");
-  };
+  const handleRestore = React.useCallback(
+    async (ev: SyntheticEvent<>, options?: { collectionId: string }) => {
+      await document.restore(options);
+      ui.showToast(t("Document restored"), { type: "success" });
+    },
+    [ui, t, document]
+  );
 
-  handleArchive = async (ev: SyntheticEvent<>) => {
-    await this.props.document.archive();
-    this.props.ui.showToast("Document archived");
-  };
+  const handleUnpublish = React.useCallback(
+    async (ev: SyntheticEvent<>) => {
+      await document.unpublish();
+      ui.showToast(t("Document unpublished"), { type: "success" });
+    },
+    [ui, t, document]
+  );
 
-  handleRestore = async (ev: SyntheticEvent<>) => {
-    await this.props.document.restore();
-    this.props.ui.showToast("Document restored");
-  };
+  const handlePrint = React.useCallback((ev: SyntheticEvent<>) => {
+    window.print();
+  }, []);
 
-  handlePin = (ev: SyntheticEvent<>) => {
-    this.props.document.pin();
-  };
+  const handleStar = React.useCallback(
+    (ev: SyntheticEvent<>) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      document.star();
+    },
+    [document]
+  );
 
-  handleUnpin = (ev: SyntheticEvent<>) => {
-    this.props.document.unpin();
-  };
+  const handleUnstar = React.useCallback(
+    (ev: SyntheticEvent<>) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      document.unstar();
+    },
+    [document]
+  );
 
-  handleStar = (ev: SyntheticEvent<>) => {
-    ev.stopPropagation();
-    this.props.document.star();
-  };
+  const handleShareLink = React.useCallback(
+    async (ev: SyntheticEvent<>) => {
+      await document.share();
+      setShowShareModal(true);
+    },
+    [document]
+  );
 
-  handleUnstar = (ev: SyntheticEvent<>) => {
-    ev.stopPropagation();
-    this.props.document.unstar();
-  };
+  const can = policies.abilities(document.id);
+  const canShareDocuments = !!(can.share && auth.team && auth.team.sharing);
+  const canViewHistory = can.read && !can.restore;
+  const collection = collections.get(document.collectionId);
 
-  handleExport = (ev: SyntheticEvent<>) => {
-    this.props.document.download();
-  };
-
-  handleShareLink = async (ev: SyntheticEvent<>) => {
-    const { document } = this.props;
-    if (!document.shareUrl) await document.share();
-
-    this.props.ui.setActiveModal("document-share", { document });
-  };
-
-  render() {
-    if (this.redirectTo) return <Redirect to={this.redirectTo} push />;
-
-    const {
-      policies,
-      document,
-      position,
-      className,
-      showToggleEmbeds,
-      showPrint,
-      showPin,
-      auth,
-      onOpen,
-      onClose,
-    } = this.props;
-
-    const can = policies.abilities(document.id);
-    const canShareDocuments = can.share && auth.team && auth.team.sharing;
-    const canViewHistory = can.read && !can.restore;
-
-    return (
-      <DropdownMenu
-        className={className}
-        position={position}
-        onOpen={onOpen}
+  return (
+    <>
+      {label ? (
+        <MenuButton {...menu}>{label}</MenuButton>
+      ) : (
+        <OverflowMenuButton
+          className={className}
+          aria-label={t("Show menu")}
+          {...menu}
+        />
+      )}
+      <ContextMenu
+        {...menu}
+        aria-label={t("Document options")}
+        onOpen={handleOpen}
         onClose={onClose}
       >
-        {(can.unarchive || can.restore) && (
-          <DropdownMenuItem onClick={this.handleRestore}>
-            Restore
-          </DropdownMenuItem>
-        )}
-        {showPin &&
-          (document.pinned
-            ? can.unpin && (
-                <DropdownMenuItem onClick={this.handleUnpin}>
-                  Unpin
-                </DropdownMenuItem>
-              )
-            : can.pin && (
-                <DropdownMenuItem onClick={this.handlePin}>
-                  Pin to collection
-                </DropdownMenuItem>
-              ))}
-        {document.isStarred
-          ? can.unstar && (
-              <DropdownMenuItem onClick={this.handleUnstar}>
-                Unstar
-              </DropdownMenuItem>
-            )
-          : can.star && (
-              <DropdownMenuItem onClick={this.handleStar}>
-                Star
-              </DropdownMenuItem>
-            )}
-        {canShareDocuments && (
-          <DropdownMenuItem
-            onClick={this.handleShareLink}
-            title="Create a public share link"
+        <Template
+          {...menu}
+          items={[
+            {
+              title: t("Restore"),
+              visible: !!can.unarchive,
+              onClick: handleRestore,
+            },
+            {
+              title: t("Restore"),
+              visible: !!(collection && can.restore),
+              onClick: handleRestore,
+            },
+            {
+              title: t("Restore"),
+              visible: !collection && !!can.restore,
+              style: {
+                left: -170,
+                position: "relative",
+                top: -40,
+              },
+              hover: true,
+              items: [
+                {
+                  type: "heading",
+                  title: t("Choose a collection"),
+                },
+                ...collections.orderedData.map((collection) => {
+                  const can = policies.abilities(collection.id);
+
+                  return {
+                    title: (
+                      <Flex align="center">
+                        <CollectionIcon collection={collection} />
+                        <CollectionName>{collection.name}</CollectionName>
+                      </Flex>
+                    ),
+                    onClick: (ev) =>
+                      handleRestore(ev, { collectionId: collection.id }),
+                    disabled: !can.update,
+                  };
+                }),
+              ],
+            },
+            {
+              title: t("Unpin"),
+              onClick: document.unpin,
+              visible: !!(showPin && document.pinned && can.unpin),
+            },
+            {
+              title: t("Pin to collection"),
+              onClick: document.pin,
+              visible: !!(showPin && !document.pinned && can.pin),
+            },
+            {
+              title: t("Unstar"),
+              onClick: handleUnstar,
+              visible: document.isStarred && !!can.unstar,
+            },
+            {
+              title: t("Star"),
+              onClick: handleStar,
+              visible: !document.isStarred && !!can.star,
+            },
+            {
+              title: `${t("Share link")}…`,
+              onClick: handleShareLink,
+              visible: canShareDocuments,
+            },
+            {
+              title: t("Enable embeds"),
+              onClick: document.enableEmbeds,
+              visible: !!showToggleEmbeds && document.embedsDisabled,
+            },
+            {
+              title: t("Disable embeds"),
+              onClick: document.disableEmbeds,
+              visible: !!showToggleEmbeds && !document.embedsDisabled,
+            },
+            {
+              type: "separator",
+            },
+            {
+              title: t("New nested document"),
+              to: newDocumentUrl(document.collectionId, {
+                parentDocumentId: document.id,
+              }),
+              visible: !!can.createChildDocument,
+            },
+            {
+              title: `${t("Create template")}…`,
+              onClick: () => setShowTemplateModal(true),
+              visible: !!can.update && !document.isTemplate,
+            },
+            {
+              title: t("Edit"),
+              to: editDocumentUrl(document),
+              visible: !!can.update,
+            },
+            {
+              title: t("Duplicate"),
+              onClick: handleDuplicate,
+              visible: !!can.update,
+            },
+            {
+              title: t("Unpublish"),
+              onClick: handleUnpublish,
+              visible: !!can.unpublish,
+            },
+            {
+              title: t("Archive"),
+              onClick: handleArchive,
+              visible: !!can.archive,
+            },
+            {
+              title: `${t("Delete")}…`,
+              onClick: () => setShowDeleteModal(true),
+              visible: !!can.delete,
+            },
+            {
+              title: `${t("Move")}…`,
+              to: documentMoveUrl(document),
+              visible: !!can.move,
+            },
+            {
+              type: "separator",
+            },
+            {
+              title: t("History"),
+              to: isRevision
+                ? documentUrl(document)
+                : documentHistoryUrl(document),
+              visible: canViewHistory,
+            },
+            {
+              title: t("Download"),
+              onClick: document.download,
+              visible: !!can.download,
+            },
+            {
+              title: t("Print"),
+              onClick: handlePrint,
+              visible: !!showPrint,
+            },
+          ]}
+        />
+      </ContextMenu>
+      {renderModals && (
+        <>
+          <Modal
+            title={t("Delete {{ documentName }}", {
+              documentName: document.noun,
+            })}
+            onRequestClose={() => setShowDeleteModal(false)}
+            isOpen={showDeleteModal}
           >
-            Share link…
-          </DropdownMenuItem>
-        )}
-        {showToggleEmbeds && (
-          <React.Fragment>
-            {document.embedsDisabled ? (
-              <DropdownMenuItem onClick={document.enableEmbeds}>
-                Enable embeds
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onClick={document.disableEmbeds}>
-                Disable embeds
-              </DropdownMenuItem>
-            )}
-          </React.Fragment>
-        )}
-        {canViewHistory && (
-          <React.Fragment>
-            <hr />
-            <DropdownMenuItem onClick={this.handleDocumentHistory}>
-              Document history
-            </DropdownMenuItem>
-          </React.Fragment>
-        )}
-        {can.createChildDocument && (
-          <DropdownMenuItem
-            onClick={this.handleNewChild}
-            title="Create a nested document inside the current document"
+            <DocumentDelete
+              document={document}
+              onSubmit={() => setShowDeleteModal(false)}
+            />
+          </Modal>
+          <Modal
+            title={t("Create template")}
+            onRequestClose={() => setShowTemplateModal(false)}
+            isOpen={showTemplateModal}
           >
-            New nested document
-          </DropdownMenuItem>
-        )}
-        {can.update && (
-          <DropdownMenuItem onClick={this.handleEdit}>Edit</DropdownMenuItem>
-        )}
-        {can.update && (
-          <DropdownMenuItem onClick={this.handleDuplicate}>
-            Duplicate
-          </DropdownMenuItem>
-        )}
-        {can.archive && (
-          <DropdownMenuItem onClick={this.handleArchive}>
-            Archive
-          </DropdownMenuItem>
-        )}
-        {can.delete && (
-          <DropdownMenuItem onClick={this.handleDelete}>
-            Delete…
-          </DropdownMenuItem>
-        )}
-        {can.move && (
-          <DropdownMenuItem onClick={this.handleMove}>Move…</DropdownMenuItem>
-        )}
-        <hr />
-        {can.download && (
-          <DropdownMenuItem onClick={this.handleExport}>
-            Download
-          </DropdownMenuItem>
-        )}
-        {showPrint && (
-          <DropdownMenuItem onClick={window.print}>Print</DropdownMenuItem>
-        )}
-      </DropdownMenu>
-    );
-  }
+            <DocumentTemplatize
+              document={document}
+              onSubmit={() => setShowTemplateModal(false)}
+            />
+          </Modal>
+          <Modal
+            title={t("Share document")}
+            onRequestClose={() => setShowShareModal(false)}
+            isOpen={showShareModal}
+          >
+            <DocumentShare
+              document={document}
+              onSubmit={() => setShowShareModal(false)}
+            />
+          </Modal>
+        </>
+      )}
+    </>
+  );
 }
 
-export default inject("ui", "auth", "collections", "policies")(DocumentMenu);
+const CollectionName = styled.div`
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+`;
+
+export default observer(DocumentMenu);

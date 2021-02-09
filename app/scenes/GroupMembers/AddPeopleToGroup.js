@@ -1,20 +1,23 @@
 // @flow
-import * as React from "react";
-import { inject, observer } from "mobx-react";
-import { observable } from "mobx";
 import { debounce } from "lodash";
-import Flex from "shared/components/Flex";
+import { observable } from "mobx";
+import { inject, observer } from "mobx-react";
+import * as React from "react";
+import { withTranslation, type TFunction } from "react-i18next";
+import AuthStore from "stores/AuthStore";
+import GroupMembershipsStore from "stores/GroupMembershipsStore";
+import UiStore from "stores/UiStore";
+import UsersStore from "stores/UsersStore";
+import Group from "models/Group";
+import User from "models/User";
+import Invite from "scenes/Invite";
+import ButtonLink from "components/ButtonLink";
+import Empty from "components/Empty";
+import Flex from "components/Flex";
 import HelpText from "components/HelpText";
 import Input from "components/Input";
 import Modal from "components/Modal";
-import Empty from "components/Empty";
 import PaginatedList from "components/PaginatedList";
-import Invite from "scenes/Invite";
-import Group from "models/Group";
-import UiStore from "stores/UiStore";
-import AuthStore from "stores/AuthStore";
-import UsersStore from "stores/UsersStore";
-import GroupMembershipsStore from "stores/GroupMembershipsStore";
 import GroupMemberListItem from "./components/GroupMemberListItem";
 
 type Props = {
@@ -24,6 +27,7 @@ type Props = {
   groupMemberships: GroupMembershipsStore,
   users: UsersStore,
   onSubmit: () => void,
+  t: TFunction,
 };
 
 @observer
@@ -50,39 +54,45 @@ class AddPeopleToGroup extends React.Component<Props> {
     });
   }, 250);
 
-  handleAddUser = async user => {
+  handleAddUser = async (user: User) => {
+    const { t } = this.props;
+
     try {
       await this.props.groupMemberships.create({
         groupId: this.props.group.id,
         userId: user.id,
       });
-      this.props.ui.showToast(`${user.name} was added to the group`);
+      this.props.ui.showToast(
+        t(`{{userName}} was added to the group`, { userName: user.name }),
+        { type: "success" }
+      );
     } catch (err) {
-      this.props.ui.showToast("Could not add user");
+      this.props.ui.showToast(t("Could not add user"), { type: "error" });
     }
   };
 
   render() {
-    const { users, group, auth } = this.props;
+    const { users, group, auth, t } = this.props;
     const { user, team } = auth;
     if (!user || !team) return null;
 
     return (
       <Flex column>
         <HelpText>
-          Add team members below to give them access to the group. Need to add
-          someone who’s not yet on the team yet?{" "}
-          <a role="button" onClick={this.handleInviteModalOpen}>
-            Invite them to {team.name}
-          </a>.
+          {t(
+            "Add team members below to give them access to the group. Need to add someone who’s not yet on the team yet?"
+          )}{" "}
+          <ButtonLink onClick={this.handleInviteModalOpen}>
+            {t("Invite them to {{teamName}}", { teamName: team.name })}
+          </ButtonLink>
+          .
         </HelpText>
-
         <Input
           type="search"
-          placeholder="Search by name…"
+          placeholder={`${t("Search by name")}…`}
           value={this.query}
           onChange={this.handleFilter}
-          label="Search people"
+          label={t("Search people")}
           labelHidden
           autoFocus
           flex
@@ -90,24 +100,23 @@ class AddPeopleToGroup extends React.Component<Props> {
         <PaginatedList
           empty={
             this.query ? (
-              <Empty>No people matching your search</Empty>
+              <Empty>{t("No people matching your search")}</Empty>
             ) : (
-              <Empty>No people left to add</Empty>
+              <Empty>{t("No people left to add")}</Empty>
             )
           }
           items={users.notInGroup(group.id, this.query)}
           fetch={this.query ? undefined : users.fetchPage}
-          renderItem={item => (
+          renderItem={(item) => (
             <GroupMemberListItem
               key={item.id}
               user={item}
               onAdd={() => this.handleAddUser(item)}
-              canEdit
             />
           )}
         />
         <Modal
-          title="Invite people"
+          title={t("Invite people")}
           onRequestClose={this.handleInviteModalClose}
           isOpen={this.inviteModalOpen}
         >
@@ -118,6 +127,6 @@ class AddPeopleToGroup extends React.Component<Props> {
   }
 }
 
-export default inject("auth", "users", "groupMemberships", "ui")(
-  AddPeopleToGroup
+export default withTranslation()<AddPeopleToGroup>(
+  inject("auth", "users", "groupMemberships", "ui")(AddPeopleToGroup)
 );

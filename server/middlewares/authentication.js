@@ -1,15 +1,17 @@
 // @flow
-import JWT from "jsonwebtoken";
-import { type Context } from "koa";
-import { User, ApiKey } from "../models";
-import { getUserForJWT } from "../utils/jwt";
-import { AuthenticationError, UserSuspendedError } from "../errors";
 import addMonths from "date-fns/add_months";
-import addMinutes from "date-fns/add_minutes";
-import { getCookieDomain } from "../../shared/utils/domains";
+import JWT from "jsonwebtoken";
+import { AuthenticationError, UserSuspendedError } from "../errors";
+import { User, Event, Team, ApiKey } from "../models";
+import type { ContextWithState } from "../types";
+import { getCookieDomain } from "../utils/domains";
+import { getUserForJWT } from "../utils/jwt";
 
 export default function auth(options?: { required?: boolean } = {}) {
-  return async function authMiddleware(ctx: Context, next: () => Promise<*>) {
+  return async function authMiddleware(
+    ctx: ContextWithState,
+    next: () => Promise<mixed>
+  ) {
     let token;
 
     const authorizationHeader = ctx.request.get("authorization");
@@ -27,7 +29,6 @@ export default function auth(options?: { required?: boolean } = {}) {
           `Bad Authorization header format. Format is "Authorization: Bearer <token>"`
         );
       }
-      // $FlowFixMe
     } else if (ctx.body && ctx.body.token) {
       token = ctx.body.token;
     } else if (ctx.request.query.token) {
@@ -43,7 +44,8 @@ export default function auth(options?: { required?: boolean } = {}) {
     let user;
     if (token) {
       if (String(token).match(/^[\w]{38}$/)) {
-        // API key
+        ctx.state.authType = "api";
+
         let apiKey;
         try {
           apiKey = await ApiKey.findOne({
@@ -51,17 +53,30 @@ export default function auth(options?: { required?: boolean } = {}) {
               secret: token,
             },
           });
-        } catch (e) {
+        } catch (err) {
           throw new AuthenticationError("Invalid API key");
         }
 
-        if (!apiKey) throw new AuthenticationError("Invalid API key");
+        if (!apiKey) {
+          throw new AuthenticationError("Invalid API key");
+        }
 
-        user = await User.findByPk(apiKey.userId);
-        if (!user) throw new AuthenticationError("Invalid API key");
+        user = await User.findByPk(apiKey.userId, {
+          include: [
+            {
+              model: Team,
+              as: "team",
+              required: true,
+            },
+          ],
+        });
+        if (!user) {
+          throw new AuthenticationError("Invalid API key");
+        }
       } else {
-        // JWT
-        user = await getUserForJWT(token);
+        ctx.state.authType = "app";
+
+        user = await getUserForJWT(String(token));
       }
 
       if (user.isSuspended) {
@@ -75,19 +90,43 @@ export default function auth(options?: { required?: boolean } = {}) {
       // not awaiting the promise here so that the request is not blocked
       user.updateActiveAt(ctx.request.ip);
 
-      ctx.state.token = token;
+      ctx.state.token = String(token);
       ctx.state.user = user;
-      if (!ctx.cache) ctx.cache = {};
-      ctx.cache[user.id] = user;
     }
 
-    ctx.signIn = async (user, team, service, isFirstSignin = false) => {
+    ctx.signIn = (user: User, team: Team, service, isFirstSignin = false) => {
       if (user.isSuspended) {
         return ctx.redirect("/?notice=suspended");
       }
 
       // update the database when the user last signed in
       user.updateSignedIn(ctx.request.ip);
+
+      if (isFirstSignin) {
+        Event.create({
+          name: "users.create",
+          actorId: user.id,
+          userId: user.id,
+          teamId: team.id,
+          data: {
+            name: user.name,
+            service,
+          },
+          ip: ctx.request.ip,
+        });
+      } else {
+        Event.create({
+          name: "users.signin",
+          actorId: user.id,
+          userId: user.id,
+          teamId: team.id,
+          data: {
+            name: user.name,
+            service,
+          },
+          ip: ctx.request.ip,
+        });
+      }
 
       const domain = getCookieDomain(ctx.request.hostname);
       const expires = addMonths(new Date(), 3);
@@ -123,12 +162,9 @@ export default function auth(options?: { required?: boolean } = {}) {
           domain,
         });
 
-        ctx.cookies.set("accessToken", user.getJwtToken(), {
-          httpOnly: true,
-          expires: addMinutes(new Date(), 1),
-          domain,
-        });
-        ctx.redirect(`${team.url}/auth/redirect`);
+        ctx.redirect(
+          `${team.url}/auth/redirect?token=${user.getTransferToken()}`
+        );
       } else {
         ctx.cookies.set("accessToken", user.getJwtToken(), {
           httpOnly: false,

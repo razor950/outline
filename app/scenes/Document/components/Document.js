@@ -1,44 +1,47 @@
 // @flow
-import * as React from "react";
 import { debounce } from "lodash";
-import styled, { withTheme } from "styled-components";
-import breakpoint from "styled-components-breakpoint";
 import { observable } from "mobx";
 import { observer, inject } from "mobx-react";
-import { Prompt, Route, withRouter } from "react-router-dom";
-import type { Location, RouterHistory } from "react-router-dom";
+import { InputIcon } from "outline-icons";
+import * as React from "react";
 import keydown from "react-keydown";
-import Flex from "shared/components/Flex";
+import { Prompt, Route, withRouter } from "react-router-dom";
+import type { RouterHistory, Match } from "react-router-dom";
+import styled from "styled-components";
+import breakpoint from "styled-components-breakpoint";
+
+import AuthStore from "stores/AuthStore";
+import UiStore from "stores/UiStore";
+import Document from "models/Document";
+import Revision from "models/Revision";
+import Branding from "components/Branding";
+import ErrorBoundary from "components/ErrorBoundary";
+import Flex from "components/Flex";
+import LoadingIndicator from "components/LoadingIndicator";
+import LoadingPlaceholder from "components/LoadingPlaceholder";
+import Notice from "components/Notice";
+import PageTitle from "components/PageTitle";
+import Time from "components/Time";
+import Container from "./Container";
+import Contents from "./Contents";
+import DocumentMove from "./DocumentMove";
+import Editor from "./Editor";
+import Header from "./Header";
+import KeyboardShortcutsButton from "./KeyboardShortcutsButton";
+import MarkAsViewed from "./MarkAsViewed";
+import References from "./References";
+import { type LocationWithState, type Theme } from "types";
+import { isCustomDomain } from "utils/domains";
+import { emojiToUrl } from "utils/emoji";
+import { meta } from "utils/keyboard";
 import {
   collectionUrl,
   documentMoveUrl,
   documentHistoryUrl,
-  documentEditUrl,
+  editDocumentUrl,
   documentUrl,
 } from "utils/routeHelpers";
-import { emojiToUrl } from "utils/emoji";
 
-import Header from "./Header";
-import DocumentMove from "./DocumentMove";
-import KeyboardShortcutsButton from "./KeyboardShortcutsButton";
-import References from "./References";
-import Loading from "./Loading";
-import Container from "./Container";
-import Contents from "./Contents";
-import MarkAsViewed from "./MarkAsViewed";
-import ErrorBoundary from "components/ErrorBoundary";
-import LoadingIndicator from "components/LoadingIndicator";
-import PageTitle from "components/PageTitle";
-import Branding from "shared/components/Branding";
-import Notice from "shared/components/Notice";
-import Time from "shared/components/Time";
-
-import UiStore from "stores/UiStore";
-import AuthStore from "stores/AuthStore";
-import Document from "models/Document";
-import Revision from "models/Revision";
-
-let EditorImport;
 const AUTOSAVE_DELAY = 3000;
 const IS_DIRTY_DELAY = 500;
 const DISCARD_CHANGES = `
@@ -51,58 +54,53 @@ Are you sure you want to discard them?
 `;
 
 type Props = {
-  match: Object,
+  match: Match,
   history: RouterHistory,
-  location: Location,
+  location: LocationWithState,
   abilities: Object,
   document: Document,
   revision: Revision,
   readOnly: boolean,
-  onCreateLink: (title: string) => string,
+  onCreateLink: (title: string) => Promise<string>,
   onSearchLink: (term: string) => any,
-  theme: Object,
+  theme: Theme,
   auth: AuthStore,
   ui: UiStore,
 };
 
 @observer
 class DocumentScene extends React.Component<Props> {
-  @observable editor: ?any;
-  getEditorText: () => string = () => this.props.document.text;
-
-  @observable editorComponent = EditorImport;
+  @observable editor = React.createRef();
   @observable isUploading: boolean = false;
   @observable isSaving: boolean = false;
   @observable isPublishing: boolean = false;
   @observable isDirty: boolean = false;
   @observable isEmpty: boolean = true;
   @observable moveModalOpen: boolean = false;
-  @observable lastRevision: number;
-  @observable title: string;
-
-  constructor(props) {
-    super();
-    this.title = props.document.title;
-    this.lastRevision = props.document.revision;
-    this.loadEditor();
-  }
-
-  componentDidMount() {
-    this.updateIsDirty();
-    this.updateBackground();
-  }
+  @observable lastRevision: number = this.props.document.revision;
+  @observable title: string = this.props.document.title;
+  getEditorText: () => string = () => this.props.document.text;
 
   componentDidUpdate(prevProps) {
     const { auth, document } = this.props;
 
+    if (prevProps.readOnly && !this.props.readOnly) {
+      this.updateIsDirty();
+    }
+
     if (this.props.readOnly) {
       this.lastRevision = document.revision;
+
+      if (document.title !== this.title) {
+        this.title = document.title;
+      }
     } else if (prevProps.document.revision !== this.lastRevision) {
       if (auth.user && document.updatedBy.id !== auth.user.id) {
         this.props.ui.showToast(
           `Document updated by ${document.updatedBy.name}`,
           {
             timeout: 30 * 1000,
+            type: "warning",
             action: {
               text: "Reload",
               onClick: () => {
@@ -114,13 +112,11 @@ class DocumentScene extends React.Component<Props> {
       }
     }
 
-    this.updateBackground();
-  }
-
-  updateBackground() {
-    // ensure the wider page color always matches the theme. This is to
-    // account for share links which don't sit in the wider Layout component
-    window.document.body.style.background = this.props.theme.background;
+    if (document.injectTemplate) {
+      document.injectTemplate = false;
+      this.title = document.title;
+      this.isDirty = true;
+    }
   }
 
   @keydown("m")
@@ -130,7 +126,7 @@ class DocumentScene extends React.Component<Props> {
     ev.preventDefault();
     const { document, abilities } = this.props;
 
-    if (abilities.update) {
+    if (abilities.move) {
       this.props.history.push(documentMoveUrl(document));
     }
   }
@@ -143,7 +139,7 @@ class DocumentScene extends React.Component<Props> {
     const { document, abilities } = this.props;
 
     if (abilities.update) {
-      this.props.history.push(documentEditUrl(document));
+      this.props.history.push(editDocumentUrl(document));
     }
   }
 
@@ -169,7 +165,7 @@ class DocumentScene extends React.Component<Props> {
     }
   }
 
-  @keydown("meta+shift+p")
+  @keydown(`${meta}+shift+p`)
   onPublish(ev) {
     ev.preventDefault();
     const { document } = this.props;
@@ -177,7 +173,7 @@ class DocumentScene extends React.Component<Props> {
     this.onSave({ publish: true, done: true });
   }
 
-  @keydown("meta+ctrl+h")
+  @keydown(`${meta}+ctrl+h`)
   onToggleTableOfContents(ev) {
     if (!this.props.readOnly) return;
 
@@ -190,22 +186,6 @@ class DocumentScene extends React.Component<Props> {
       ui.showTableOfContents();
     }
   }
-
-  loadEditor = async () => {
-    if (this.editorComponent) return;
-
-    try {
-      const EditorImport = await import("./Editor");
-      this.editorComponent = EditorImport.default;
-    } catch (err) {
-      console.error(err);
-
-      // If the editor bundle fails to load then reload the entire window. This
-      // can happen if a deploy happens between the user loading the initial JS
-      // bundle and the async-loaded editor JS bundle as the hash will change.
-      window.location.reload();
-    }
-  };
 
   handleCloseMoveModal = () => (this.moveModalOpen = false);
   handleOpenMoveModal = () => (this.moveModalOpen = true);
@@ -256,11 +236,11 @@ class DocumentScene extends React.Component<Props> {
         this.props.history.push(savedDocument.url);
         this.props.ui.setActiveDocument(savedDocument);
       } else if (isNew) {
-        this.props.history.push(documentEditUrl(savedDocument));
+        this.props.history.push(editDocumentUrl(savedDocument));
         this.props.ui.setActiveDocument(savedDocument);
       }
     } catch (err) {
-      this.props.ui.showToast(err.message);
+      this.props.ui.showToast(err.message, { type: "error" });
     } finally {
       this.isSaving = false;
       this.isPublishing = false;
@@ -292,13 +272,21 @@ class DocumentScene extends React.Component<Props> {
     this.isUploading = false;
   };
 
-  onChange = getEditorText => {
+  onChange = (getEditorText) => {
     this.getEditorText = getEditorText;
-    this.updateIsDirtyDebounced();
-    this.autosave();
+
+    // document change while read only is presumed to be a checkbox edit,
+    // in that case we don't delay in saving for a better user experience.
+    if (this.props.readOnly) {
+      this.updateIsDirty();
+      this.onSave({ done: false, autosave: true });
+    } else {
+      this.updateIsDirtyDebounced();
+      this.autosave();
+    }
   };
 
-  onChangeTitle = event => {
+  onChangeTitle = (event) => {
     this.title = event.target.value;
     this.updateIsDirtyDebounced();
     this.autosave();
@@ -308,10 +296,12 @@ class DocumentScene extends React.Component<Props> {
     let url;
     if (this.props.document.url) {
       url = this.props.document.url;
-    } else {
+    } else if (this.props.match.params.id) {
       url = collectionUrl(this.props.match.params.id);
     }
-    this.props.history.push(url);
+    if (url) {
+      this.props.history.push(url);
+    }
   };
 
   render() {
@@ -319,22 +309,24 @@ class DocumentScene extends React.Component<Props> {
       document,
       revision,
       readOnly,
-      location,
+      abilities,
       auth,
       ui,
       match,
     } = this.props;
     const team = auth.team;
-    const Editor = this.editorComponent;
     const isShare = !!match.params.shareId;
 
-    if (!Editor) {
-      return <Loading location={location} />;
-    }
-
     const value = revision ? revision.text : document.text;
+    const injectTemplate = document.injectTemplate;
     const disableEmbeds =
       (team && team.documentEmbeds === false) || document.embedsDisabled;
+
+    const headings = this.editor.current
+      ? this.editor.current.getHeadings()
+      : [];
+    const showContents =
+      (ui.tocVisible && readOnly) || (isShare && !!headings.length);
 
     return (
       <ErrorBoundary>
@@ -351,14 +343,14 @@ class DocumentScene extends React.Component<Props> {
             )}
           />
           <PageTitle
-            title={document.title.replace(document.emoji, "") || "Untitled"}
+            title={document.titleWithDefault.replace(document.emoji, "")}
             favicon={document.emoji ? emojiToUrl(document.emoji) : undefined}
           />
           {(this.isUploading || this.isSaving) && <LoadingIndicator />}
 
           <Container justify="center" column auto>
             {!readOnly && (
-              <React.Fragment>
+              <>
                 <Prompt
                   when={this.isDirty && !this.isUploading}
                   message={DISCARD_CHANGES}
@@ -367,7 +359,7 @@ class DocumentScene extends React.Component<Props> {
                   when={this.isUploading && !this.isDirty}
                   message={UPLOADING_WARNING}
                 />
-              </React.Fragment>
+              </>
             )}
             {!isShare && (
               <Header
@@ -387,91 +379,98 @@ class DocumentScene extends React.Component<Props> {
             )}
             <MaxWidth
               archived={document.isArchived}
-              tocVisible={ui.tocVisible}
+              showContents={showContents}
               column
               auto
             >
-              {document.archivedAt &&
-                !document.deletedAt && (
-                  <Notice muted>
-                    Archived by {document.updatedBy.name}{" "}
-                    <Time dateTime={document.archivedAt} /> ago
-                  </Notice>
-                )}
+              {document.isTemplate && !readOnly && (
+                <Notice muted>
+                  You’re editing a template. Highlight some text and use the{" "}
+                  <PlaceholderIcon color="currentColor" /> control to add
+                  placeholders that can be filled out when creating new
+                  documents from this template.
+                </Notice>
+              )}
+              {document.archivedAt && !document.deletedAt && (
+                <Notice muted>
+                  Archived by {document.updatedBy.name}{" "}
+                  <Time dateTime={document.archivedAt} /> ago
+                </Notice>
+              )}
               {document.deletedAt && (
                 <Notice muted>
                   Deleted by {document.updatedBy.name}{" "}
                   <Time dateTime={document.deletedAt} /> ago
                   {document.permanentlyDeletedAt && (
-                    <React.Fragment>
+                    <>
                       <br />
-                      This document will be permanently deleted in{" "}
+                      This {document.noun} will be permanently deleted in{" "}
                       <Time dateTime={document.permanentlyDeletedAt} /> unless
                       restored.
-                    </React.Fragment>
+                    </>
                   )}
                 </Notice>
               )}
-              <Flex auto={!readOnly}>
-                {ui.tocVisible &&
-                  readOnly && (
-                    <Contents
-                      headings={this.editor ? this.editor.getHeadings() : []}
-                    />
-                  )}
-                <Editor
-                  id={document.id}
-                  ref={ref => {
-                    if (ref) {
-                      this.editor = ref;
-                    }
-                  }}
-                  isDraft={document.isDraft}
-                  key={disableEmbeds ? "embeds-disabled" : "embeds-enabled"}
-                  title={revision ? revision.title : this.title}
-                  document={document}
-                  value={readOnly ? value : undefined}
-                  defaultValue={value}
-                  disableEmbeds={disableEmbeds}
-                  onImageUploadStart={this.onImageUploadStart}
-                  onImageUploadStop={this.onImageUploadStop}
-                  onSearchLink={this.props.onSearchLink}
-                  onCreateLink={this.props.onCreateLink}
-                  onChangeTitle={this.onChangeTitle}
-                  onChange={this.onChange}
-                  onSave={this.onSave}
-                  onPublish={this.onPublish}
-                  onCancel={this.goBack}
-                  readOnly={readOnly || document.isArchived}
-                  ui={this.props.ui}
-                />
-              </Flex>
-              {readOnly &&
-                !isShare &&
-                !revision && (
-                  <React.Fragment>
+              <React.Suspense fallback={<LoadingPlaceholder />}>
+                <Flex auto={!readOnly}>
+                  {showContents && <Contents headings={headings} />}
+                  <Editor
+                    id={document.id}
+                    innerRef={this.editor}
+                    isShare={isShare}
+                    isDraft={document.isDraft}
+                    template={document.isTemplate}
+                    key={[injectTemplate, disableEmbeds].join("-")}
+                    title={revision ? revision.title : this.title}
+                    document={document}
+                    value={readOnly ? value : undefined}
+                    defaultValue={value}
+                    disableEmbeds={disableEmbeds}
+                    onImageUploadStart={this.onImageUploadStart}
+                    onImageUploadStop={this.onImageUploadStop}
+                    onSearchLink={this.props.onSearchLink}
+                    onCreateLink={this.props.onCreateLink}
+                    onChangeTitle={this.onChangeTitle}
+                    onChange={this.onChange}
+                    onSave={this.onSave}
+                    onPublish={this.onPublish}
+                    onCancel={this.goBack}
+                    readOnly={readOnly}
+                    readOnlyWriteCheckboxes={readOnly && abilities.update}
+                    ui={this.props.ui}
+                  />
+                </Flex>
+                {!isShare && !revision && (
+                  <>
                     <MarkAsViewed document={document} />
                     <ReferencesWrapper isOnlyTitle={document.isOnlyTitle}>
                       <References document={document} />
                     </ReferencesWrapper>
-                  </React.Fragment>
+                  </>
                 )}
+              </React.Suspense>
             </MaxWidth>
           </Container>
         </Background>
-        {isShare ? <Branding /> : <KeyboardShortcutsButton />}
+        {isShare && !isCustomDomain() && <Branding />}
+        {!isShare && <KeyboardShortcutsButton />}
       </ErrorBoundary>
     );
   }
 }
 
+const PlaceholderIcon = styled(InputIcon)`
+  position: relative;
+  top: 6px;
+`;
+
 const Background = styled(Container)`
-  background: ${props => props.theme.background};
-  transition: ${props => props.theme.backgroundTransition};
+  background: ${(props) => props.theme.background};
+  transition: ${(props) => props.theme.backgroundTransition};
 `;
 
 const ReferencesWrapper = styled("div")`
-  margin-top: ${props => (props.isOnlyTitle ? -45 : 16)}px;
+  margin-top: ${(props) => (props.isOnlyTitle ? -45 : 16)}px;
 
   @media print {
     display: none;
@@ -479,7 +478,7 @@ const ReferencesWrapper = styled("div")`
 `;
 
 const MaxWidth = styled(Flex)`
-  ${props =>
+  ${(props) =>
     props.archived && `* { color: ${props.theme.textSecondary} !important; } `};
   padding: 0 16px;
   max-width: 100vw;
@@ -488,7 +487,8 @@ const MaxWidth = styled(Flex)`
   ${breakpoint("tablet")`	
     padding: 0 24px;
     margin: 4px auto 12px;
-    max-width: calc(48px + ${props => (props.tocVisible ? "64em" : "46em")});
+    max-width: calc(48px + ${(props) =>
+      props.showContents ? "64em" : "46em"});
   `};
 
   ${breakpoint("desktopLarge")`
@@ -497,5 +497,5 @@ const MaxWidth = styled(Flex)`
 `;
 
 export default withRouter(
-  inject("ui", "auth", "policies", "revisions")(withTheme(DocumentScene))
+  inject("ui", "auth", "policies", "revisions")(DocumentScene)
 );

@@ -1,27 +1,28 @@
 // @flow
-import * as React from "react";
 import { observable } from "mobx";
-import styled from "styled-components";
 import { inject, observer } from "mobx-react";
 import { PlusIcon } from "outline-icons";
-import Flex from "shared/components/Flex";
-import HelpText from "components/HelpText";
-import Subheading from "components/Subheading";
-import Button from "components/Button";
-import Empty from "components/Empty";
-import PaginatedList from "components/PaginatedList";
-import Modal from "components/Modal";
-import CollectionGroupMemberListItem from "./components/CollectionGroupMemberListItem";
-import Collection from "models/Collection";
-import UiStore from "stores/UiStore";
+import * as React from "react";
+import styled from "styled-components";
 import AuthStore from "stores/AuthStore";
-import MembershipsStore from "stores/MembershipsStore";
 import CollectionGroupMembershipsStore from "stores/CollectionGroupMembershipsStore";
-import UsersStore from "stores/UsersStore";
-import MemberListItem from "./components/MemberListItem";
-import AddPeopleToCollection from "./AddPeopleToCollection";
-import AddGroupsToCollection from "./AddGroupsToCollection";
 import GroupsStore from "stores/GroupsStore";
+import MembershipsStore from "stores/MembershipsStore";
+import UiStore from "stores/UiStore";
+import UsersStore from "stores/UsersStore";
+import Collection from "models/Collection";
+import Button from "components/Button";
+import ButtonLink from "components/ButtonLink";
+import Empty from "components/Empty";
+import Flex from "components/Flex";
+import HelpText from "components/HelpText";
+import Modal from "components/Modal";
+import PaginatedList from "components/PaginatedList";
+import Subheading from "components/Subheading";
+import AddGroupsToCollection from "./AddGroupsToCollection";
+import AddPeopleToCollection from "./AddPeopleToCollection";
+import CollectionGroupMemberListItem from "./components/CollectionGroupMemberListItem";
+import MemberListItem from "./components/MemberListItem";
 
 type Props = {
   ui: UiStore,
@@ -55,15 +56,17 @@ class CollectionMembers extends React.Component<Props> {
     this.addMemberModalOpen = false;
   };
 
-  handleRemoveUser = user => {
+  handleRemoveUser = (user) => {
     try {
       this.props.memberships.delete({
         collectionId: this.props.collection.id,
         userId: user.id,
       });
-      this.props.ui.showToast(`${user.name} was removed from the collection`);
+      this.props.ui.showToast(`${user.name} was removed from the collection`, {
+        type: "success",
+      });
     } catch (err) {
-      this.props.ui.showToast("Could not remove user");
+      this.props.ui.showToast("Could not remove user", { type: "error" });
     }
   };
 
@@ -74,21 +77,25 @@ class CollectionMembers extends React.Component<Props> {
         userId: user.id,
         permission,
       });
-      this.props.ui.showToast(`${user.name} permissions were updated`);
+      this.props.ui.showToast(`${user.name} permissions were updated`, {
+        type: "success",
+      });
     } catch (err) {
-      this.props.ui.showToast("Could not update user");
+      this.props.ui.showToast("Could not update user", { type: "error" });
     }
   };
 
-  handleRemoveGroup = group => {
+  handleRemoveGroup = (group) => {
     try {
       this.props.collectionGroupMemberships.delete({
         collectionId: this.props.collection.id,
         groupId: group.id,
       });
-      this.props.ui.showToast(`${group.name} was removed from the collection`);
+      this.props.ui.showToast(`${group.name} was removed from the collection`, {
+        type: "success",
+      });
     } catch (err) {
-      this.props.ui.showToast("Could not remove group");
+      this.props.ui.showToast("Could not remove group", { type: "error" });
     }
   };
 
@@ -99,9 +106,11 @@ class CollectionMembers extends React.Component<Props> {
         groupId: group.id,
         permission,
       });
-      this.props.ui.showToast(`${group.name} permissions were updated`);
+      this.props.ui.showToast(`${group.name} permissions were updated`, {
+        type: "success",
+      });
     } catch (err) {
-      this.props.ui.showToast("Could not update user");
+      this.props.ui.showToast("Could not update user", { type: "error" });
     }
   };
 
@@ -118,22 +127,23 @@ class CollectionMembers extends React.Component<Props> {
     if (!user) return null;
 
     const key = memberships.orderedData
-      .map(m => m.permission)
+      .map((m) => m.permission)
       .concat(collection.private)
       .join("-");
 
     return (
       <Flex column>
         {collection.private ? (
-          <React.Fragment>
+          <>
             <HelpText>
               Choose which groups and team members have access to view and edit
               documents in the private <strong>{collection.name}</strong>{" "}
               collection. You can make this collection visible to the entire
               team by{" "}
-              <a role="button" onClick={this.props.onEdit}>
-                changing its visibility
-              </a>.
+              <ButtonLink onClick={this.props.onEdit}>
+                changing the visibility
+              </ButtonLink>
+              .
             </HelpText>
             <span>
               <Button
@@ -145,15 +155,14 @@ class CollectionMembers extends React.Component<Props> {
                 Add groups
               </Button>
             </span>
-          </React.Fragment>
+          </>
         ) : (
           <HelpText>
             The <strong>{collection.name}</strong> collection is accessible by
             everyone on the team. If you want to limit who can view the
             collection,{" "}
-            <a role="button" onClick={this.props.onEdit}>
-              make it private
-            </a>.
+            <ButtonLink onClick={this.props.onEdit}>make it private</ButtonLink>
+            .
           </HelpText>
         )}
 
@@ -166,7 +175,7 @@ class CollectionMembers extends React.Component<Props> {
               fetch={collectionGroupMemberships.fetchPage}
               options={collection.private ? { id: collection.id } : undefined}
               empty={<Empty>This collection has no groups.</Empty>}
-              renderItem={group => (
+              renderItem={(group) => (
                 <CollectionGroupMemberListItem
                   key={group.id}
                   group={group}
@@ -174,7 +183,7 @@ class CollectionMembers extends React.Component<Props> {
                     `${group.id}-${collection.id}`
                   )}
                   onRemove={() => this.handleRemoveGroup(group)}
-                  onUpdate={permission =>
+                  onUpdate={(permission) =>
                     this.handleUpdateGroup(group, permission)
                   }
                 />
@@ -193,7 +202,7 @@ class CollectionMembers extends React.Component<Props> {
           </GroupsWrap>
         )}
         {collection.private ? (
-          <React.Fragment>
+          <>
             <span>
               <Button
                 type="button"
@@ -206,7 +215,7 @@ class CollectionMembers extends React.Component<Props> {
             </span>
 
             <Subheading>Individual Members</Subheading>
-          </React.Fragment>
+          </>
         ) : (
           <Subheading>Members</Subheading>
         )}
@@ -219,14 +228,14 @@ class CollectionMembers extends React.Component<Props> {
           }
           fetch={collection.private ? memberships.fetchPage : users.fetchPage}
           options={collection.private ? { id: collection.id } : undefined}
-          renderItem={item => (
+          renderItem={(item) => (
             <MemberListItem
               key={item.id}
               user={item}
               membership={memberships.get(`${item.id}-${collection.id}`)}
               canEdit={collection.private && item.id !== user.id}
               onRemove={() => this.handleRemoveUser(item)}
-              onUpdate={permission => this.handleUpdateUser(item, permission)}
+              onUpdate={(permission) => this.handleUpdateUser(item, permission)}
             />
           )}
         />

@@ -1,40 +1,71 @@
 // @flow
-import Sequelize from "sequelize";
 import Router from "koa-router";
+import Sequelize from "sequelize";
 import auth from "../middlewares/authentication";
-import pagination from "./middlewares/pagination";
-import { presentEvent } from "../presenters";
-import { Event, Team, User } from "../models";
+import { Event, Team, User, Collection } from "../models";
 import policy from "../policies";
+import { presentEvent } from "../presenters";
+import pagination from "./middlewares/pagination";
 
 const Op = Sequelize.Op;
 const { authorize } = policy;
 const router = new Router();
 
-router.post("events.list", auth(), pagination(), async ctx => {
-  let { sort = "createdAt", direction, auditLog = false } = ctx.body;
-  if (direction !== "ASC") direction = "DESC";
-
+router.post("events.list", auth(), pagination(), async (ctx) => {
   const user = ctx.state.user;
-  const paranoid = false;
-  const collectionIds = await user.collectionIds(paranoid);
+  let {
+    sort = "createdAt",
+    actorId,
+    collectionId,
+    direction,
+    name,
+    auditLog = false,
+  } = ctx.body;
+  if (direction !== "ASC") direction = "DESC";
 
   let where = {
     name: Event.ACTIVITY_EVENTS,
     teamId: user.teamId,
-    [Op.or]: [
-      { collectionId: collectionIds },
-      {
-        collectionId: {
-          [Op.eq]: null,
-        },
-      },
-    ],
   };
+
+  if (actorId) {
+    ctx.assertUuid(actorId, "actorId must be a UUID");
+    where = {
+      ...where,
+      actorId,
+    };
+  }
+
+  if (collectionId) {
+    ctx.assertUuid(collectionId, "collection must be a UUID");
+
+    where = { ...where, collectionId };
+    const collection = await Collection.scope({
+      method: ["withMembership", user.id],
+    }).findByPk(collectionId);
+    authorize(user, "read", collection);
+  } else {
+    const collectionIds = await user.collectionIds({ paranoid: false });
+    where = {
+      ...where,
+      [Op.or]: [
+        { collectionId: collectionIds },
+        {
+          collectionId: {
+            [Op.eq]: null,
+          },
+        },
+      ],
+    };
+  }
 
   if (auditLog) {
     authorize(user, "auditLog", Team);
     where.name = Event.AUDIT_EVENTS;
+  }
+
+  if (name && where.name.includes(name)) {
+    where.name = name;
   }
 
   const events = await Event.findAll({
@@ -53,7 +84,7 @@ router.post("events.list", auth(), pagination(), async ctx => {
 
   ctx.body = {
     pagination: ctx.state.pagination,
-    data: events.map(event => presentEvent(event, auditLog)),
+    data: events.map((event) => presentEvent(event, auditLog)),
   };
 });
 

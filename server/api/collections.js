@@ -1,17 +1,9 @@
 // @flow
 import fs from "fs";
 import Router from "koa-router";
-import { Op } from "../sequelize";
+import { ValidationError } from "../errors";
+import { exportCollections } from "../logistics";
 import auth from "../middlewares/authentication";
-import pagination from "./middlewares/pagination";
-import {
-  presentCollection,
-  presentUser,
-  presentPolicies,
-  presentMembership,
-  presentGroup,
-  presentCollectionGroupMembership,
-} from "../presenters";
 import {
   Collection,
   CollectionUser,
@@ -21,16 +13,30 @@ import {
   User,
   Group,
 } from "../models";
-import { ValidationError } from "../errors";
-import { exportCollections } from "../logistics";
-import { archiveCollection, archiveCollections } from "../utils/zip";
 import policy from "../policies";
+import {
+  presentCollection,
+  presentUser,
+  presentPolicies,
+  presentMembership,
+  presentGroup,
+  presentCollectionGroupMembership,
+} from "../presenters";
+import { Op } from "../sequelize";
+import { archiveCollection, archiveCollections } from "../utils/zip";
+import pagination from "./middlewares/pagination";
 
 const { authorize } = policy;
 const router = new Router();
 
-router.post("collections.create", auth(), async ctx => {
-  const { name, color, description, icon, type } = ctx.body;
+router.post("collections.create", auth(), async (ctx) => {
+  const {
+    name,
+    color,
+    description,
+    icon,
+    sort = Collection.DEFAULT_SORT,
+  } = ctx.body;
   const isPrivate = ctx.body.private;
   ctx.assertPresent(name, "name is required");
 
@@ -46,10 +52,10 @@ router.post("collections.create", auth(), async ctx => {
     description,
     icon,
     color,
-    type: type || "atlas",
     teamId: user.teamId,
-    creatorId: user.id,
+    createdById: user.id,
     private: isPrivate,
+    sort,
   });
 
   await Event.create({
@@ -74,7 +80,7 @@ router.post("collections.create", auth(), async ctx => {
   };
 });
 
-router.post("collections.info", auth(), async ctx => {
+router.post("collections.info", auth(), async (ctx) => {
   const { id } = ctx.body;
   ctx.assertUuid(id, "id is required");
 
@@ -90,7 +96,7 @@ router.post("collections.info", auth(), async ctx => {
   };
 });
 
-router.post("collections.add_group", auth(), async ctx => {
+router.post("collections.add_group", auth(), async (ctx) => {
   const { id, groupId, permission = "read_write" } = ctx.body;
   ctx.assertUuid(id, "id is required");
   ctx.assertUuid(groupId, "groupId is required");
@@ -140,7 +146,7 @@ router.post("collections.add_group", auth(), async ctx => {
   };
 });
 
-router.post("collections.remove_group", auth(), async ctx => {
+router.post("collections.remove_group", auth(), async (ctx) => {
   const { id, groupId } = ctx.body;
   ctx.assertUuid(id, "id is required");
   ctx.assertUuid(groupId, "groupId is required");
@@ -173,7 +179,7 @@ router.post(
   "collections.group_memberships",
   auth(),
   pagination(),
-  async ctx => {
+  async (ctx) => {
     const { id, query, permission } = ctx.body;
     ctx.assertUuid(id, "id is required");
 
@@ -226,13 +232,13 @@ router.post(
         collectionGroupMemberships: memberships.map(
           presentCollectionGroupMembership
         ),
-        groups: memberships.map(membership => presentGroup(membership.group)),
+        groups: memberships.map((membership) => presentGroup(membership.group)),
       },
     };
   }
 );
 
-router.post("collections.add_user", auth(), async ctx => {
+router.post("collections.add_user", auth(), async (ctx) => {
   const { id, userId, permission = "read_write" } = ctx.body;
   ctx.assertUuid(id, "id is required");
   ctx.assertUuid(userId, "userId is required");
@@ -282,7 +288,7 @@ router.post("collections.add_user", auth(), async ctx => {
   };
 });
 
-router.post("collections.remove_user", auth(), async ctx => {
+router.post("collections.remove_user", auth(), async (ctx) => {
   const { id, userId } = ctx.body;
   ctx.assertUuid(id, "id is required");
   ctx.assertUuid(userId, "userId is required");
@@ -313,7 +319,7 @@ router.post("collections.remove_user", auth(), async ctx => {
 });
 
 // DEPRECATED: Use collection.memberships which has pagination, filtering and permissions
-router.post("collections.users", auth(), async ctx => {
+router.post("collections.users", auth(), async (ctx) => {
   const { id } = ctx.body;
   ctx.assertUuid(id, "id is required");
 
@@ -330,7 +336,7 @@ router.post("collections.users", auth(), async ctx => {
   };
 });
 
-router.post("collections.memberships", auth(), pagination(), async ctx => {
+router.post("collections.memberships", auth(), pagination(), async (ctx) => {
   const { id, query, permission } = ctx.body;
   ctx.assertUuid(id, "id is required");
 
@@ -380,12 +386,12 @@ router.post("collections.memberships", auth(), pagination(), async ctx => {
     pagination: ctx.state.pagination,
     data: {
       memberships: memberships.map(presentMembership),
-      users: memberships.map(membership => presentUser(membership.user)),
+      users: memberships.map((membership) => presentUser(membership.user)),
     },
   };
 });
 
-router.post("collections.export", auth(), async ctx => {
+router.post("collections.export", auth(), async (ctx) => {
   const { id } = ctx.body;
   ctx.assertUuid(id, "id is required");
 
@@ -411,7 +417,7 @@ router.post("collections.export", auth(), async ctx => {
   ctx.body = fs.createReadStream(filePath);
 });
 
-router.post("collections.export_all", auth(), async ctx => {
+router.post("collections.export_all", auth(), async (ctx) => {
   const { download = false } = ctx.body;
 
   const user = ctx.state.user;
@@ -445,17 +451,15 @@ router.post("collections.export_all", auth(), async ctx => {
   }
 });
 
-router.post("collections.update", auth(), async ctx => {
-  const { id, name, description, icon, color } = ctx.body;
+router.post("collections.update", auth(), async (ctx) => {
+  let { id, name, description, icon, color, sort } = ctx.body;
   const isPrivate = ctx.body.private;
-  ctx.assertPresent(name, "name is required");
 
   if (color) {
     ctx.assertHexColor(color, "Invalid hex value (please use format #FFFFFF)");
   }
 
   const user = ctx.state.user;
-
   const collection = await Collection.scope({
     method: ["withMembership", user.id],
   }).findByPk(id);
@@ -479,11 +483,24 @@ router.post("collections.update", auth(), async ctx => {
 
   const isPrivacyChanged = isPrivate !== collection.private;
 
-  collection.name = name;
-  collection.description = description;
-  collection.icon = icon;
-  collection.color = color;
-  collection.private = isPrivate;
+  if (name !== undefined) {
+    collection.name = name;
+  }
+  if (description !== undefined) {
+    collection.description = description;
+  }
+  if (icon !== undefined) {
+    collection.icon = icon;
+  }
+  if (color !== undefined) {
+    collection.color = color;
+  }
+  if (isPrivate !== undefined) {
+    collection.private = isPrivate;
+  }
+  if (sort !== undefined) {
+    collection.sort = sort;
+  }
 
   await collection.save();
 
@@ -508,7 +525,7 @@ router.post("collections.update", auth(), async ctx => {
   };
 });
 
-router.post("collections.list", auth(), pagination(), async ctx => {
+router.post("collections.list", auth(), pagination(), async (ctx) => {
   const user = ctx.state.user;
   const collectionIds = await user.collectionIds();
   let collections = await Collection.scope({
@@ -530,7 +547,7 @@ router.post("collections.list", auth(), pagination(), async ctx => {
   };
 });
 
-router.post("collections.delete", auth(), async ctx => {
+router.post("collections.delete", auth(), async (ctx) => {
   const { id } = ctx.body;
   const user = ctx.state.user;
   ctx.assertUuid(id, "id is required");

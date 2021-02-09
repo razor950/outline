@@ -1,26 +1,46 @@
 // @flow
-import { observable, action, computed, autorun, runInAction } from "mobx";
+import * as Sentry from "@sentry/react";
 import invariant from "invariant";
+import { observable, action, computed, autorun, runInAction } from "mobx";
 import { getCookie, setCookie, removeCookie } from "tiny-cookie";
-import { client } from "utils/ApiClient";
-import { getCookieDomain } from "shared/utils/domains";
 import RootStore from "stores/RootStore";
-import User from "models/User";
+import Policy from "models/Policy";
 import Team from "models/Team";
+import User from "models/User";
+import env from "env";
+import { client } from "utils/ApiClient";
+import { getCookieDomain } from "utils/domains";
 
 const AUTH_STORE = "AUTH_STORE";
+const NO_REDIRECT_PATHS = ["/", "/create", "/home"];
+
+type Service = {|
+  id: string,
+  name: string,
+  authUrl: string,
+|};
+
+type Config = {|
+  name?: string,
+  hostname?: string,
+  services: Service[],
+|};
 
 export default class AuthStore {
   @observable user: ?User;
   @observable team: ?Team;
   @observable token: ?string;
+  @observable lastSignedIn: ?string;
   @observable isSaving: boolean = false;
   @observable isSuspended: boolean = false;
   @observable suspendedContactEmail: ?string;
+  @observable config: ?Config;
   rootStore: RootStore;
 
   constructor(rootStore: RootStore) {
-    // Rehydrate
+    this.rootStore = rootStore;
+
+    // attempt to load the previous state of this store from localstorage
     let data = {};
     try {
       data = JSON.parse(localStorage.getItem(AUTH_STORE) || "{}");
@@ -28,13 +48,9 @@ export default class AuthStore {
       // no-op Safari private mode
     }
 
-    this.rootStore = rootStore;
-    this.user = new User(data.user);
-    this.team = new Team(data.team);
-    this.token = getCookie("accessToken");
+    this.rehydrate(data);
 
-    if (this.token) setImmediate(() => this.fetch());
-
+    // persists this entire store to localstorage whenever any keys are changed
     autorun(() => {
       try {
         localStorage.setItem(AUTH_STORE, this.asJson);
@@ -42,11 +58,40 @@ export default class AuthStore {
         // no-op Safari private mode
       }
     });
+
+    // listen to the localstorage value changing in other tabs to react to
+    // signin/signout events in other tabs and follow suite.
+    window.addEventListener("storage", (event) => {
+      if (event.key === AUTH_STORE) {
+        const data = JSON.parse(event.newValue);
+
+        // if there is no user on the new data then we know the other tab
+        // signed out and we should do the same. Otherwise, if we're not
+        // signed in then hydrate from the received data
+        if (this.token && data.user === null) {
+          this.logout();
+        } else if (!this.token) {
+          this.rehydrate(data);
+        }
+      }
+    });
   }
 
-  addPolicies = policies => {
+  @action
+  rehydrate(data: { user: User, team: Team }) {
+    this.user = new User(data.user);
+    this.team = new Team(data.team);
+    this.token = getCookie("accessToken");
+    this.lastSignedIn = getCookie("lastSignedIn");
+
+    if (this.token) {
+      setImmediate(() => this.fetch());
+    }
+  }
+
+  addPolicies = (policies: Policy[]) => {
     if (policies) {
-      policies.forEach(policy => this.rootStore.policies.add(policy));
+      policies.forEach((policy) => this.rootStore.policies.add(policy));
     }
   };
 
@@ -64,6 +109,13 @@ export default class AuthStore {
   }
 
   @action
+  fetchConfig = async () => {
+    const res = await client.post("/auth.config");
+    invariant(res && res.data, "Config not available");
+    this.config = res.data;
+  };
+
+  @action
   fetch = async () => {
     try {
       const res = await client.post("/auth.info");
@@ -75,8 +127,8 @@ export default class AuthStore {
         this.user = new User(user);
         this.team = new Team(team);
 
-        if (window.Sentry) {
-          Sentry.configureScope(function(scope) {
+        if (env.SENTRY_DSN) {
+          Sentry.configureScope(function (scope) {
             scope.setUser({ id: user.id });
             scope.setExtra("team", team.name);
             scope.setExtra("teamId", team.id);
@@ -87,7 +139,10 @@ export default class AuthStore {
         const postLoginRedirectPath = getCookie("postLoginRedirectPath");
         if (postLoginRedirectPath) {
           removeCookie("postLoginRedirectPath");
-          window.location.href = postLoginRedirectPath;
+
+          if (!NO_REDIRECT_PATHS.includes(postLoginRedirectPath)) {
+            window.location.href = postLoginRedirectPath;
+          }
         }
       });
     } catch (err) {
@@ -158,10 +213,16 @@ export default class AuthStore {
       })
     );
 
+    this.token = null;
+
     // if this logout was forced from an authenticated route then
     // save the current path so we can go back there once signed in
     if (savePath) {
-      setCookie("postLoginRedirectPath", window.location.pathname);
+      const pathName = window.location.pathname;
+
+      if (!NO_REDIRECT_PATHS.includes(pathName)) {
+        setCookie("postLoginRedirectPath", pathName);
+      }
     }
 
     // remove authentication token itself
@@ -178,8 +239,5 @@ export default class AuthStore {
       });
       this.team = null;
     }
-
-    // add a timestamp to force reload from server
-    window.location.href = `${BASE_URL}?done=${new Date().getTime()}`;
   };
 }

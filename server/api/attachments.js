@@ -1,8 +1,11 @@
 // @flow
+import format from "date-fns/format";
 import Router from "koa-router";
 import uuid from "uuid";
-import format from "date-fns/format";
+import { NotFoundError } from "../errors";
+import auth from "../middlewares/authentication";
 import { Attachment, Document, Event } from "../models";
+import policy from "../policies";
 import {
   makePolicy,
   getSignature,
@@ -10,15 +13,12 @@ import {
   makeCredential,
   getSignedImageUrl,
 } from "../utils/s3";
-import auth from "../middlewares/authentication";
-import { NotFoundError } from "../errors";
-import policy from "../policies";
 
 const { authorize } = policy;
 const router = new Router();
 const AWS_S3_ACL = process.env.AWS_S3_ACL || "private";
 
-router.post("attachments.create", auth(), async ctx => {
+router.post("attachments.create", auth(), async (ctx) => {
   let { name, documentId, contentType, size } = ctx.body;
 
   ctx.assertPresent(name, "name is required");
@@ -27,11 +27,15 @@ router.post("attachments.create", auth(), async ctx => {
 
   const { user } = ctx.state;
   const s3Key = uuid.v4();
-  const key = `uploads/${user.id}/${s3Key}/${name}`;
   const acl =
     ctx.body.public === undefined
       ? AWS_S3_ACL
-      : ctx.body.public ? "public-read" : "private";
+      : ctx.body.public
+      ? "public-read"
+      : "private";
+
+  const bucket = acl === "public-read" ? "public" : "uploads";
+  const key = `${bucket}/${user.id}/${s3Key}/${name}`;
   const credential = makeCredential();
   const longDate = format(new Date(), "YYYYMMDDTHHmmss\\Z");
   const policy = makePolicy(credential, longDate, acl);
@@ -88,7 +92,39 @@ router.post("attachments.create", auth(), async ctx => {
   };
 });
 
-router.post("attachments.redirect", auth(), async ctx => {
+router.post("attachments.delete", auth(), async (ctx) => {
+  let { id } = ctx.body;
+  ctx.assertPresent(id, "id is required");
+
+  const user = ctx.state.user;
+  const attachment = await Attachment.findByPk(id);
+  if (!attachment) {
+    throw new NotFoundError();
+  }
+
+  if (attachment.documentId) {
+    const document = await Document.findByPk(attachment.documentId, {
+      userId: user.id,
+    });
+    authorize(user, "update", document);
+  }
+
+  authorize(user, "delete", attachment);
+  await attachment.destroy();
+
+  await Event.create({
+    name: "attachments.delete",
+    teamId: user.teamId,
+    userId: user.id,
+    ip: ctx.request.ip,
+  });
+
+  ctx.body = {
+    success: true,
+  };
+});
+
+router.post("attachments.redirect", auth(), async (ctx) => {
   const { id } = ctx.body;
   ctx.assertPresent(id, "id is required");
 

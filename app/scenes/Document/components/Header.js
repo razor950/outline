@@ -1,36 +1,46 @@
 // @flow
-import * as React from "react";
 import { throttle } from "lodash";
 import { observable } from "mobx";
 import { observer, inject } from "mobx-react";
-import { Redirect } from "react-router-dom";
+import {
+  TableOfContentsIcon,
+  EditIcon,
+  GlobeIcon,
+  PlusIcon,
+  MoreIcon,
+} from "outline-icons";
+import { transparentize, darken } from "polished";
+import * as React from "react";
+import { withTranslation, Trans, type TFunction } from "react-i18next";
+import { Link } from "react-router-dom";
 import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
-import { TableOfContentsIcon, EditIcon, PlusIcon } from "outline-icons";
-import { transparentize, darken } from "polished";
-import Document from "models/Document";
 import AuthStore from "stores/AuthStore";
-import { documentEditUrl } from "utils/routeHelpers";
-import { meta } from "utils/keyboard";
+import PoliciesStore from "stores/PoliciesStore";
+import SharesStore from "stores/SharesStore";
+import UiStore from "stores/UiStore";
+import Document from "models/Document";
 
-import Flex from "shared/components/Flex";
-import Breadcrumb, { Slash } from "shared/components/Breadcrumb";
+import DocumentShare from "scenes/DocumentShare";
+import { Action, Separator } from "components/Actions";
+import Badge from "components/Badge";
+import Breadcrumb, { Slash } from "components/Breadcrumb";
+import Button from "components/Button";
+import Collaborators from "components/Collaborators";
+import Fade from "components/Fade";
+import Flex from "components/Flex";
+import Modal from "components/Modal";
+import Tooltip from "components/Tooltip";
 import DocumentMenu from "menus/DocumentMenu";
 import NewChildDocumentMenu from "menus/NewChildDocumentMenu";
-import DocumentShare from "scenes/DocumentShare";
-import Button from "components/Button";
-import Tooltip from "components/Tooltip";
-import Modal from "components/Modal";
-import Fade from "components/Fade";
-import Badge from "components/Badge";
-import Collaborators from "components/Collaborators";
-import { Action, Separator } from "components/Actions";
-import PoliciesStore from "stores/PoliciesStore";
-import UiStore from "stores/UiStore";
+import TemplatesMenu from "menus/TemplatesMenu";
+import { metaDisplay } from "utils/keyboard";
+import { newDocumentUrl, editDocumentUrl } from "utils/routeHelpers";
 
 type Props = {
   auth: AuthStore,
   ui: UiStore,
+  shares: SharesStore,
   policies: PoliciesStore,
   document: Document,
   isDraft: boolean,
@@ -46,13 +56,13 @@ type Props = {
     publish?: boolean,
     autosave?: boolean,
   }) => void,
+  t: TFunction,
 };
 
 @observer
 class Header extends React.Component<Props> {
   @observable isScrolled = false;
   @observable showShareModal = false;
-  @observable redirectTo: ?string;
 
   componentDidMount() {
     window.addEventListener("scroll", this.handleScroll);
@@ -68,10 +78,6 @@ class Header extends React.Component<Props> {
 
   handleScroll = throttle(this.updateIsScrolled, 50);
 
-  handleEdit = () => {
-    this.redirectTo = documentEditUrl(this.props.document);
-  };
-
   handleSave = () => {
     this.props.onSave({ done: true });
   };
@@ -82,9 +88,8 @@ class Header extends React.Component<Props> {
 
   handleShareLink = async (ev: SyntheticEvent<>) => {
     const { document } = this.props;
-    if (!document.shareUrl) {
-      await document.share();
-    }
+    await document.share();
+
     this.showShareModal = true;
   };
 
@@ -100,9 +105,8 @@ class Header extends React.Component<Props> {
   };
 
   render() {
-    if (this.redirectTo) return <Redirect to={this.redirectTo} push />;
-
     const {
+      shares,
       document,
       policies,
       isEditing,
@@ -114,8 +118,13 @@ class Header extends React.Component<Props> {
       publishingIsDisabled,
       ui,
       auth,
+      t,
     } = this.props;
 
+    const share = shares.getByDocumentId(document.id);
+    const isPubliclyShared = share && share.published;
+    const isNew = document.isNew;
+    const isTemplate = document.isTemplate;
     const can = policies.abilities(document.id);
     const canShareDocuments = auth.team && auth.team.sharing && can.share;
     const canToggleEmbeds = auth.team && auth.team.documentEmbeds;
@@ -125,28 +134,28 @@ class Header extends React.Component<Props> {
       <Actions
         align="center"
         justify="space-between"
-        readOnly={!isEditing}
         isCompact={this.isScrolled}
         shrink={false}
       >
         <Modal
           isOpen={this.showShareModal}
           onRequestClose={this.handleCloseShareModal}
-          title="Share document"
+          title={t("Share document")}
         >
           <DocumentShare
             document={document}
             onSubmit={this.handleCloseShareModal}
           />
         </Modal>
-        <BreadcrumbAndContents align="center" justify="flex-start">
-          <Breadcrumb document={document} />
+        <Breadcrumb document={document}>
           {!isEditing && (
-            <React.Fragment>
+            <>
               <Slash />
               <Tooltip
-                tooltip={ui.tocVisible ? "Hide contents" : "Show contents"}
-                shortcut={`ctrl+${meta}+h`}
+                tooltip={
+                  ui.tocVisible ? t("Hide contents") : t("Show contents")
+                }
+                shortcut={`ctrl+${metaDisplay}+h`}
                 delay={250}
                 placement="bottom"
               >
@@ -160,139 +169,173 @@ class Header extends React.Component<Props> {
                   iconColor="currentColor"
                   borderOnHover
                   neutral
-                  small
                 />
               </Tooltip>
-            </React.Fragment>
+            </>
           )}
-        </BreadcrumbAndContents>
+        </Breadcrumb>
         {this.isScrolled && (
           <Title onClick={this.handleClickTitle}>
             <Fade>
-              {document.title} {document.isArchived && <Badge>Archived</Badge>}
+              {document.title}{" "}
+              {document.isArchived && <Badge>{t("Archived")}</Badge>}
             </Fade>
           </Title>
         )}
         <Wrapper align="center" justify="flex-end">
-          {isSaving &&
-            !isPublishing && (
-              <Action>
-                <Status>Saving…</Status>
-              </Action>
-            )}
+          {isSaving && !isPublishing && (
+            <Action>
+              <Status>{t("Saving")}…</Status>
+            </Action>
+          )}
           &nbsp;
-          <Collaborators
-            document={document}
-            currentUserId={auth.user ? auth.user.id : undefined}
-          />
-          {!isDraft &&
-            !isEditing &&
-            canShareDocuments && (
-              <Action>
+          <Fade>
+            <Collaborators
+              document={document}
+              currentUserId={auth.user ? auth.user.id : undefined}
+            />
+          </Fade>
+          {isEditing && !isTemplate && isNew && (
+            <Action>
+              <TemplatesMenu document={document} />
+            </Action>
+          )}
+          {!isEditing && canShareDocuments && (
+            <Action>
+              <Tooltip
+                tooltip={
+                  isPubliclyShared ? (
+                    <Trans>
+                      Anyone with the link <br />
+                      can view this document
+                    </Trans>
+                  ) : (
+                    ""
+                  )
+                }
+                delay={500}
+                placement="bottom"
+              >
                 <Button
+                  icon={isPubliclyShared ? <GlobeIcon /> : undefined}
                   onClick={this.handleShareLink}
-                  title="Share document"
                   neutral
-                  small
                 >
-                  Share
+                  {t("Share")}
                 </Button>
-              </Action>
-            )}
+              </Tooltip>
+            </Action>
+          )}
           {isEditing && (
-            <React.Fragment>
+            <>
               <Action>
                 <Tooltip
-                  tooltip="Save"
-                  shortcut={`${meta}+enter`}
+                  tooltip={t("Save")}
+                  shortcut={`${metaDisplay}+enter`}
                   delay={500}
                   placement="bottom"
                 >
                   <Button
                     onClick={this.handleSave}
                     disabled={savingIsDisabled}
-                    isSaving={isSaving}
                     neutral={isDraft}
-                    small
                   >
-                    {isDraft ? "Save Draft" : "Done Editing"}
+                    {isDraft ? t("Save Draft") : t("Done Editing")}
                   </Button>
                 </Tooltip>
               </Action>
-            </React.Fragment>
+            </>
           )}
-          {can.update &&
-            isDraft &&
-            !isRevision && (
-              <Action>
-                <Tooltip
-                  tooltip="Publish"
-                  shortcut={`${meta}+shift+p`}
-                  delay={500}
-                  placement="bottom"
-                >
-                  <Button
-                    onClick={this.handlePublish}
-                    title="Publish document"
-                    disabled={publishingIsDisabled}
-                    small
-                  >
-                    {isPublishing ? "Publishing…" : "Publish"}
-                  </Button>
-                </Tooltip>
-              </Action>
-            )}
           {canEdit && (
             <Action>
               <Tooltip
-                tooltip="Edit document"
+                tooltip={t("Edit {{noun}}", { noun: document.noun })}
                 shortcut="e"
                 delay={500}
                 placement="bottom"
               >
                 <Button
+                  as={Link}
                   icon={<EditIcon />}
-                  onClick={this.handleEdit}
+                  to={editDocumentUrl(this.props.document)}
                   neutral
-                  small
                 >
-                  Edit
+                  {t("Edit")}
                 </Button>
               </Tooltip>
             </Action>
           )}
-          {canEdit &&
-            can.createChildDocument && (
-              <Action>
-                <NewChildDocumentMenu
-                  document={document}
-                  label={
-                    <Tooltip
-                      tooltip="New document"
-                      shortcut="n"
-                      delay={500}
-                      placement="bottom"
-                    >
-                      <Button icon={<PlusIcon />} neutral>
-                        New doc
-                      </Button>
-                    </Tooltip>
-                  }
-                />
-              </Action>
-            )}
+          {canEdit && can.createChildDocument && (
+            <Action>
+              <NewChildDocumentMenu
+                document={document}
+                label={(props) => (
+                  <Tooltip
+                    tooltip={t("New document")}
+                    shortcut="n"
+                    delay={500}
+                    placement="bottom"
+                  >
+                    <Button icon={<PlusIcon />} {...props} neutral>
+                      {t("New doc")}
+                    </Button>
+                  </Tooltip>
+                )}
+              />
+            </Action>
+          )}
+          {canEdit && isTemplate && !isDraft && !isRevision && (
+            <Action>
+              <Button
+                icon={<PlusIcon />}
+                as={Link}
+                to={newDocumentUrl(document.collectionId, {
+                  templateId: document.id,
+                })}
+                primary
+              >
+                {t("New from template")}
+              </Button>
+            </Action>
+          )}
+          {can.update && isDraft && !isRevision && (
+            <Action>
+              <Tooltip
+                tooltip={t("Publish")}
+                shortcut={`${metaDisplay}+shift+p`}
+                delay={500}
+                placement="bottom"
+              >
+                <Button
+                  onClick={this.handlePublish}
+                  disabled={publishingIsDisabled}
+                >
+                  {isPublishing ? `${t("Publishing")}…` : t("Publish")}
+                </Button>
+              </Tooltip>
+            </Action>
+          )}
           {!isEditing && (
-            <React.Fragment>
+            <>
               <Separator />
               <Action>
                 <DocumentMenu
                   document={document}
                   isRevision={isRevision}
+                  label={(props) => (
+                    <Button
+                      icon={<MoreIcon />}
+                      iconColor="currentColor"
+                      {...props}
+                      borderOnHover
+                      neutral
+                    />
+                  )}
                   showToggleEmbeds={canToggleEmbeds}
                   showPrint
                 />
               </Action>
-            </React.Fragment>
+            </>
           )}
         </Wrapper>
       </Actions>
@@ -301,16 +344,7 @@ class Header extends React.Component<Props> {
 }
 
 const Status = styled.div`
-  color: ${props => props.theme.slate};
-`;
-
-const BreadcrumbAndContents = styled(Flex)`
-  display: none;
-
-  ${breakpoint("tablet")`	
-    display: flex;
-    width: 33.3%;
-  `};
+  color: ${(props) => props.theme.slate};
 `;
 
 const Wrapper = styled(Flex)`
@@ -329,9 +363,9 @@ const Actions = styled(Flex)`
   right: 0;
   left: 0;
   z-index: 2;
-  background: ${props => transparentize(0.2, props.theme.background)};
+  background: ${(props) => transparentize(0.2, props.theme.background)};
   box-shadow: 0 1px 0
-    ${props =>
+    ${(props) =>
       props.isCompact
         ? darken(0.05, props.theme.sidebarBackground)
         : "transparent"};
@@ -345,7 +379,11 @@ const Actions = styled(Flex)`
   }
 
   ${breakpoint("tablet")`
-    padding: ${props => (props.isCompact ? "12px" : `24px 24px 0`)};
+    padding: ${(props) => (props.isCompact ? "12px" : `24px 24px 0`)};
+
+    > div {
+      width: 33.3%;
+    }
   `};
 `;
 
@@ -358,6 +396,7 @@ const Title = styled.div`
   text-overflow: ellipsis;
   white-space: nowrap;
   overflow: hidden;
+  cursor: pointer;
   display: none;
   width: 0;
 
@@ -367,4 +406,6 @@ const Title = styled.div`
   `};
 `;
 
-export default inject("auth", "ui", "policies")(Header);
+export default withTranslation()<Header>(
+  inject("auth", "ui", "policies", "shares")(Header)
+);

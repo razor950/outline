@@ -1,15 +1,17 @@
 // @flow
-import * as React from "react";
 import { observable } from "mobx";
 import { inject, observer } from "mobx-react";
+import * as React from "react";
+import AuthStore from "stores/AuthStore";
+import UiStore from "stores/UiStore";
 import Button from "components/Button";
-import Flex from "shared/components/Flex";
+import Flex from "components/Flex";
 import HelpText from "components/HelpText";
 import Modal from "components/Modal";
-import AuthStore from "stores/AuthStore";
 
 type Props = {
   auth: AuthStore,
+  ui: UiStore,
   onRequestClose: () => void,
 };
 
@@ -24,20 +26,22 @@ class UserDelete extends React.Component<Props> {
     try {
       await this.props.auth.deleteUser();
       this.props.auth.logout();
+    } catch (error) {
+      this.props.ui.showToast(error.message, { type: "error" });
     } finally {
       this.isDeleting = false;
     }
   };
 
   render() {
-    const { auth, ...rest } = this.props;
+    const { onRequestClose } = this.props;
 
     return (
-      <Modal isOpen title="Delete Account" {...rest}>
+      <Modal isOpen title="Delete Account" onRequestClose={onRequestClose}>
         <Flex column>
           <form onSubmit={this.handleSubmit}>
             <HelpText>
-              Are you sure? Deleting your account will destory identifying data
+              Are you sure? Deleting your account will destroy identifying data
               associated with your user and cannot be undone. You will be
               immediately logged out of Outline and all your API tokens will be
               revoked.
@@ -56,4 +60,4 @@ class UserDelete extends React.Component<Props> {
   }
 }
 
-export default inject("auth")(UserDelete);
+export default inject("auth", "ui")(UserDelete);

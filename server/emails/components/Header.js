@@ -1,7 +1,9 @@
 // @flow
-import * as React from "react";
 import { Table, TBody, TR, TD } from "oy-vey";
+import * as React from "react";
 import EmptySpace from "./EmptySpace";
+
+const url = process.env.CDN_URL || process.env.URL;
 
 export default () => {
   return (
@@ -12,7 +14,7 @@ export default () => {
             <EmptySpace height={40} />
             <img
               alt="Outline"
-              src={`${process.env.URL}/email/header-logo.png`}
+              src={`${url}/email/header-logo.png`}
               height="48"
               width="48"
             />

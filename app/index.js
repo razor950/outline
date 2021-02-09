@@ -1,42 +1,49 @@
 // @flow
-import * as React from "react";
-import { render } from "react-dom";
+import "focus-visible";
+import { createBrowserHistory } from "history";
 import { Provider } from "mobx-react";
-import { BrowserRouter as Router } from "react-router-dom";
+import * as React from "react";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
+import { render } from "react-dom";
+import { Router } from "react-router-dom";
+import { initI18n } from "shared/i18n";
 import stores from "stores";
-
 import ErrorBoundary from "components/ErrorBoundary";
 import ScrollToTop from "components/ScrollToTop";
-import Toasts from "components/Toasts";
 import Theme from "components/Theme";
+import Toasts from "components/Toasts";
 import Routes from "./routes";
+import env from "env";
+import { initSentry } from "utils/sentry";
 
-let DevTools;
-if (__DEV__) {
-  DevTools = require("mobx-react-devtools").default; // eslint-disable-line global-require
-}
+initI18n();
 
 const element = document.getElementById("root");
+const history = createBrowserHistory();
+
+if (env.SENTRY_DSN) {
+  initSentry(history);
+}
 
 if (element) {
   render(
-    <React.Fragment>
-      <ErrorBoundary>
-        <Provider {...stores}>
-          <Theme>
-            <Router>
-              <React.Fragment>
+    <Provider {...stores}>
+      <Theme>
+        <ErrorBoundary>
+          <DndProvider backend={HTML5Backend}>
+            <Router history={history}>
+              <>
                 <ScrollToTop>
                   <Routes />
                 </ScrollToTop>
                 <Toasts />
-              </React.Fragment>
+              </>
             </Router>
-          </Theme>
-        </Provider>
-      </ErrorBoundary>
-      {DevTools && <DevTools position={{ bottom: 0, right: 0 }} />}
-    </React.Fragment>,
+          </DndProvider>
+        </ErrorBoundary>
+      </Theme>
+    </Provider>,
     element
   );
 }
@@ -44,7 +51,7 @@ if (element) {
 window.addEventListener("load", async () => {
   // installation does not use Google Analytics, or tracking is blocked on client
   // no point loading the rest of the analytics bundles
-  if (!process.env.GOOGLE_ANALYTICS_ID || !window.ga) return;
+  if (!env.GOOGLE_ANALYTICS_ID || !window.ga) return;
 
   // https://github.com/googleanalytics/autotrack/issues/137#issuecomment-305890099
   await import("autotrack/autotrack.js");

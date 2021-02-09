@@ -1,23 +1,20 @@
 /* eslint-disable flowtype/require-valid-file-annotation */
 import TestServer from "fetch-test-server";
 import app from "../app";
-import { flushdb, seed } from "../test/support";
+import { Revision } from "../models";
 import { buildDocument, buildUser } from "../test/factories";
-import Revision from "../models/Revision";
+import { flushdb, seed } from "../test/support";
 
 const server = new TestServer(app.callback());
 
-beforeEach(flushdb);
-afterAll(server.close);
+beforeEach(() => flushdb());
+afterAll(() => server.close());
 
-describe("#revisions.info", async () => {
+describe("#revisions.info", () => {
   it("should return a document revision", async () => {
     const { user, document } = await seed();
-    const revision = await Revision.findOne({
-      where: {
-        documentId: document.id,
-      },
-    });
+    const revision = await Revision.createFromDocument(document);
+
     const res = await server.post("/api/revisions.info", {
       body: {
         token: user.getJwtToken(),
@@ -33,11 +30,8 @@ describe("#revisions.info", async () => {
 
   it("should require authorization", async () => {
     const document = await buildDocument();
-    const revision = await Revision.findOne({
-      where: {
-        documentId: document.id,
-      },
-    });
+    const revision = await Revision.createFromDocument(document);
+
     const user = await buildUser();
     const res = await server.post("/api/revisions.info", {
       body: {
@@ -49,9 +43,11 @@ describe("#revisions.info", async () => {
   });
 });
 
-describe("#revisions.list", async () => {
+describe("#revisions.list", () => {
   it("should return a document's revisions", async () => {
     const { user, document } = await seed();
+    await Revision.createFromDocument(document);
+
     const res = await server.post("/api/revisions.list", {
       body: {
         token: user.getJwtToken(),
@@ -68,6 +64,8 @@ describe("#revisions.list", async () => {
 
   it("should not return revisions for document in collection not a member of", async () => {
     const { user, document, collection } = await seed();
+    await Revision.createFromDocument(document);
+
     collection.private = true;
     await collection.save();
 

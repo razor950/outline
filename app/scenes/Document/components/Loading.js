@@ -1,19 +1,24 @@
 // @flow
 import * as React from "react";
-import type { Location } from "react-router-dom";
-import Container from "./Container";
-import LoadingPlaceholder from "components/LoadingPlaceholder";
+import { useTranslation } from "react-i18next";
 import CenteredContent from "components/CenteredContent";
+import LoadingPlaceholder from "components/LoadingPlaceholder";
 import PageTitle from "components/PageTitle";
+import Container from "./Container";
+import type { LocationWithState } from "types";
 
 type Props = {|
-  location: Location,
+  location: LocationWithState,
 |};
 
 export default function Loading({ location }: Props) {
+  const { t } = useTranslation();
+
   return (
     <Container column auto>
-      <PageTitle title={location.state ? location.state.title : "Untitled"} />
+      <PageTitle
+        title={location.state ? location.state.title : t("Untitled")}
+      />
       <CenteredContent>
         <LoadingPlaceholder />
       </CenteredContent>

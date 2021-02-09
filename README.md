@@ -12,26 +12,77 @@
   <a href="https://circleci.com/gh/outline/outline" rel="nofollow"><img src="https://circleci.com/gh/outline/outline.svg?style=shield&amp;circle-token=c0c4c2f39990e277385d5c1ae96169c409eb887a"></a>
   <a href="https://github.com/prettier/prettier"><img src="https://img.shields.io/badge/code_style-prettier-ff69b4.svg?style=flat"></a>
   <a href="https://github.com/styled-components/styled-components"><img src="https://img.shields.io/badge/style-%F0%9F%92%85%20styled--components-orange.svg"></a>
+  <a href="https://translate.getoutline.com/project/outline"><img src="https://badges.crowdin.net/outline/localized.svg"></a>
 </p>
 
 This is the source code that runs [**Outline**](https://www.getoutline.com) and all the associated services. If you want to use Outline then you don't need to run this code, we offer a hosted version of the app at [getoutline.com](https://www.getoutline.com).
 
 If you'd like to run your own copy of Outline or contribute to development then this is the place for you.
 
-## Installation
+# Installation
 
 Outline requires the following dependencies:
 
-- Node.js >= 12
-- Postgres >=9.5
-- Redis >= 4
-- AWS S3 storage bucket for media and other attachments
+- [Node.js](https://nodejs.org/) >= 12
+- [Yarn](https://yarnpkg.com)
+- [Postgres](https://www.postgresql.org/download/) >=9.5
+- [Redis](https://redis.io/) >= 4
+- AWS S3 bucket or compatible API for file storage
 - Slack or Google developer application for authentication
 
 
-### Development
+## Self-Hosted Production
 
-In development you can quickly get an environment running using Docker by following these steps:
+### Docker
+
+For a manual self-hosted production installation these are the recommended steps:
+
+1. First setup Redis and Postgres servers, this is outside the scope of the guide.
+1. Download the latest official Docker image, new releases are available around the middle of every month:
+
+   `docker pull outlinewiki/outline`
+1. Using the [.env.sample](.env.sample) as a reference, set the required variables in your production environment. You can export the environment variables directly, or create a `.env` file and pass it to the docker image like so:
+
+   `docker run --env-file=.env outlinewiki/outline`
+1. Setup the database with `yarn sequelize:migrate`. Production assumes an SSL connection to the database by default, if
+Postgres is on the same machine and is not SSL you can migrate with `yarn sequelize:migrate --env=production-ssl-disabled`, for example:
+
+   `docker run --rm outlinewiki/outline yarn sequelize:migrate`
+1. Start the container:
+
+   `docker run outlinewiki/outline`
+1. Visit http://you_server_ip:3000 and you should be able to see Outline page
+
+   > Port number can be changed using the `PORT` environment variable
+
+1. (Optional) You can add an `nginx` or other reverse proxy to serve your instance of Outline for a clean URL without the port number, support SSL, etc.
+
+### Terraform
+
+Alternatively a community member maintains a script to deploy Outline on Google Cloud Platform with [Terraform & Ansible](https://github.com/rjsgn/outline-terraform-ansible).
+
+### Upgrading
+
+#### Docker
+
+If you're running Outline with Docker you'll need to run migrations within the docker container after updating the image. The command will be something like:
+
+```shell
+docker run --rm outlinewiki/outline:latest yarn sequelize:migrate
+```
+
+#### Git
+
+If you're running Outline by cloning this repository, run the following command to upgrade:
+
+```shell
+yarn run upgrade
+```
+
+
+## Local Development
+
+For contributing features and fixes you can quickly get an environment running using Docker by following these steps:
 
 1. Install these dependencies if you don't already have them
   1. [Docker for Desktop](https://www.docker.com)
@@ -50,40 +101,58 @@ In development you can quickly get an environment running using Docker by follow
 1. Run `make up`. This will download dependencies, build and launch a development version of Outline
 
 
-### Production
+# Contributing
 
-For a self-hosted production installation there is more flexibility, but these are the suggested steps:
+Outline is built and maintained by a small team – we'd love your help to fix bugs and add features!
 
-1. Clone this repo and install dependencies with `yarn` or `npm install`
+Before submitting a pull request please let the core team know by creating or commenting in an issue on [GitHub](https://www.github.com/outline/outline/issues), and we'd also love to hear from you in the [Discussions](https://www.github.com/outline/outline/discussions). This way we can ensure that an approach is agreed on before code is written. This will result in a much higher liklihood of code being accepted.
 
-   > Requires [Node.js](https://nodejs.org/) and [yarn](https://yarnpkg.com) installed
+If you’re looking for ways to get started, here's a list of ways to help us improve Outline:
 
-1. Build the web app with `yarn build:webpack` or `npm run build:webpack`
-1. Using the `.env.sample` as a reference, set the required variables in your production environment. The following are required as a minimum:
-    1. `SECRET_KEY` (follow instructions in the comments at the top of `.env`)
-    1. `SLACK_KEY` (this is called "Client ID" in Slack admin)
-    1. `SLACK_SECRET` (this is called "Client Secret" in Slack admin)
-    1. `DATABASE_URL` (run your own local copy of Postgres, or use a cloud service)
-    1. `REDIS_URL`  (run your own local copy of Redis, or use a cloud service)
-    1. `URL` (the public facing URL of your installation)
-    1. `AWS_` (all of the keys beginning with AWS)
-1. Migrate database schema with `yarn sequelize:migrate` or `npm run sequelize:migrate `
-1. Start the service with any daemon tools you prefer. Take PM2 for example, `NODE_ENV=production pm2 start index.js --name outline `
-1. Visit http://you_server_ip:3000 and you should be able to see Outline page
-
-   > Port number can be changed in the `.env` file
-
-1. (Optional) You can add an `nginx` reverse proxy to serve your instance of Outline for a clean URL without the port number, support SSL, etc.
+* [Translation](TRANSLATION.md) into other languages
+* Issues with [`good first issue`](https://github.com/outline/outline/labels/good%20first%20issue) label
+* Performance improvements, both on server and frontend
+* Developer happiness and documentation
+* Bugs and other issues listed on GitHub
 
 
-## Development
+## Architecture
 
-### Server
+If you're interested in contributing or learning more about the Outline codebase
+please refer to the [architecture document](ARCHITECTURE.md) first for a high level overview of how the application is put together.
+
+
+## Debugging
 
 Outline uses [debug](https://www.npmjs.com/package/debug). To enable debugging output, the following categories are available:
 
 ```
 DEBUG=sql,cache,presenters,events,logistics,emails,mailer
+```
+
+## Tests
+
+We aim to have sufficient test coverage for critical parts of the application and aren't aiming for 100% unit test coverage. All API endpoints and anything authentication related should be thoroughly tested.
+
+To add new tests, write your tests with [Jest](https://facebook.github.io/jest/) and add a file with `.test.js` extension next to the tested code.
+
+```shell
+# To run all tests
+make test
+
+# To run backend tests in watch mode
+make watch
+```
+
+Once the test database is created with  `make test` you may individually run
+frontend and backend tests directly.
+
+```shell
+# To run backend tests
+yarn test:server
+
+# To run frontend tests
+yarn test:app
 ```
 
 ## Migrations
@@ -101,69 +170,6 @@ Or to run migrations on test database:
 yarn sequelize db:migrate --env test
 ```
 
-## Structure
-
-Outline is composed of separate backend and frontend application which are both driven by the same Node process. As both are written in Javascript, they share some code but are mostly separate. We utilize the latest language features, including `async`/`await`, and [Flow](https://flow.org/) typing. Prettier and ESLint are enforced by CI.
-
-### Frontend
-
-Outline's frontend is a React application compiled with [Webpack](https://webpack.js.org/). It uses [Mobx](https://mobx.js.org/) for state management and [Styled Components](https://www.styled-components.com/) for component styles. Unless global, state logic and styles are always co-located with React components together with their subcomponents to make the component tree easier to manage.
-
-The editor itself is built on [Prosemirror](https://github.com/prosemirror) and hosted in a separate repository to encourage reuse: [rich-markdown-editor](https://github.com/outline/rich-markdown-editor)
-
-- `app/` - Frontend React application
-- `app/scenes` - Full page views
-- `app/components` - Reusable React components
-- `app/stores` - Global state stores
-- `app/models` - State models
-- `app/types` - Flow types for non-models
-
-### Backend
-
-Backend is driven by [Koa](http://koajs.com/) (API, web server), [Sequelize](http://docs.sequelizejs.com/) (database) and React for public pages and emails.
-
-- `server/api` - API endpoints
-- `server/commands` - Domain logic, currently being refactored from /models
-- `server/emails`  - React rendered email templates
-- `server/models` - Database models
-- `server/pages` - Server-side rendered public pages
-- `server/policies` - Authorization logic
-- `server/presenters` - API responses for database models
-- `server/test` - Test helps and support
-- `server/utils` - Utility methods
-- `shared` - Code shared between frontend and backend applications
-
-## Tests
-
-We aim to have sufficient test coverage for critical parts of the application and aren't aiming for 100% unit test coverage. All API endpoints and anything authentication related should be thoroughly tested.
-
-To add new tests, write your tests with [Jest](https://facebook.github.io/jest/) and add a file with `.test.js` extension next to the tested code.
-
-```shell
-# To run all tests
-yarn test
-
-# To run backend tests
-yarn test:server
-
-# To run frontend tests
-yarn test:app
-```
-
-## Contributing
-
-Outline is built and maintained by a small team – we'd love your help to fix bugs and add features!
-
-However, before working on a pull request please let the core team know by creating or commenting in an issue on [GitHub](https://www.github.com/outline/outline/issues), and we'd also love to hear from you in our [Spectrum community](https://spectrum.chat/outline). This way we can ensure that an approach is agreed on before code is written and will hopefully help to get your contributions integrated faster!
-
-If you’re looking for ways to get started, here's a list of ways to help us improve Outline:
-
-* Issues with [`good first issue`](https://github.com/outline/outline/labels/good%20first%20issue) label
-* Performance improvements, both on server and frontend
-* Developer happiness and documentation
-* Bugs and other issues listed on GitHub
-* Helping others on Spectrum
-
 ## License
 
-Outline is [BSL 1.1 licensed](https://github.com/outline/outline/blob/master/LICENSE).
+Outline is [BSL 1.1 licensed](LICENSE).

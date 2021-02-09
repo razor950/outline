@@ -1,16 +1,17 @@
 // @flow
+import { ExpandedIcon } from "outline-icons";
+import { darken } from "polished";
 import * as React from "react";
 import styled from "styled-components";
-import { darken, lighten } from "polished";
-import { ExpandedIcon } from "outline-icons";
 
 const RealButton = styled.button`
-  display: inline-block;
+  display: ${(props) => (props.fullwidth ? "block" : "inline-block")};
+  width: ${(props) => (props.fullwidth ? "100%" : "auto")};
   margin: 0;
   padding: 0;
   border: 0;
-  background: ${props => props.theme.buttonBackground};
-  color: ${props => props.theme.buttonText};
+  background: ${(props) => props.theme.buttonBackground};
+  color: ${(props) => props.theme.buttonText};
   box-shadow: rgba(0, 0, 0, 0.2) 0px 1px 2px;
   border-radius: 4px;
   font-size: 14px;
@@ -18,13 +19,16 @@ const RealButton = styled.button`
   height: 32px;
   text-decoration: none;
   flex-shrink: 0;
-  outline: none;
   cursor: pointer;
   user-select: none;
 
-  svg {
-    fill: ${props => props.iconColor || props.theme.buttonText};
-  }
+  ${(props) =>
+    !props.borderOnHover &&
+    `
+      svg {
+        fill: ${props.iconColor || props.theme.buttonText};
+      }
+    `}
 
   &::-moz-focus-inner {
     padding: 0;
@@ -32,68 +36,54 @@ const RealButton = styled.button`
   }
 
   &:hover {
-    background: ${props => darken(0.05, props.theme.buttonBackground)};
-  }
-
-  &:focus {
-    transition-duration: 0.05s;
-    box-shadow: ${props => lighten(0.4, props.theme.buttonBackground)} 0px 0px
-      0px 3px;
-    outline: none;
+    background: ${(props) => darken(0.05, props.theme.buttonBackground)};
   }
 
   &:disabled {
     cursor: default;
     pointer-events: none;
-    color: ${props => props.theme.white50};
+    color: ${(props) => props.theme.white50};
   }
 
-  ${props =>
-    props.neutral &&
+  ${(props) =>
+    props.$neutral &&
     `
     background: ${props.theme.buttonNeutralBackground};
     color: ${props.theme.buttonNeutralText};
     box-shadow: ${
-      props.borderOnHover ? "none" : "rgba(0, 0, 0, 0.07) 0px 1px 2px"
-    };
-    border: 1px solid ${
-      props.borderOnHover ? "transparent" : props.theme.buttonNeutralBorder
+      props.borderOnHover
+        ? "none"
+        : `rgba(0, 0, 0, 0.07) 0px 1px 2px, ${props.theme.buttonNeutralBorder} 0 0 0 1px inset`
     };
 
-    svg {
+    ${
+      props.borderOnHover
+        ? ""
+        : `svg {
       fill: ${props.iconColor || props.theme.buttonNeutralText};
+    }`
     }
+    
 
     &:hover {
       background: ${darken(0.05, props.theme.buttonNeutralBackground)};
-      border: 1px solid ${props.theme.buttonNeutralBorder};
-    }
-
-    &:focus {
-      transition-duration: 0.05s;
-      border: 1px solid ${lighten(0.4, props.theme.buttonBackground)};
-      box-shadow: ${lighten(0.4, props.theme.buttonBackground)} 0px 0px
-        0px 2px;
+      box-shadow: rgba(0, 0, 0, 0.07) 0px 1px 2px, ${
+        props.theme.buttonNeutralBorder
+      } 0 0 0 1px inset;
     }
 
     &:disabled {
       color: ${props.theme.textTertiary};
     }
-  `} ${props =>
-      props.danger &&
-      `
+  `} ${(props) =>
+    props.danger &&
+    `
       background: ${props.theme.danger};
       color: ${props.theme.white};
 
-    &:hover {
-      background: ${darken(0.05, props.theme.danger)};
-    }
-
-    &:focus {
-      transition-duration: 0.05s;
-      box-shadow: ${lighten(0.4, props.theme.danger)} 0px 0px
-        0px 3px;
-    }
+      &:hover {
+        background: ${darken(0.05, props.theme.danger)};
+      }
   `};
 `;
 
@@ -102,23 +92,24 @@ const Label = styled.span`
   white-space: nowrap;
   text-overflow: ellipsis;
 
-  ${props => props.hasIcon && "padding-left: 4px;"};
+  ${(props) => props.hasIcon && "padding-left: 4px;"};
 `;
 
 export const Inner = styled.span`
   display: flex;
   padding: 0 8px;
-  padding-right: ${props => (props.disclosure ? 2 : 8)}px;
-  line-height: ${props => (props.hasIcon ? 24 : 32)}px;
+  padding-right: ${(props) => (props.disclosure ? 2 : 8)}px;
+  line-height: ${(props) => (props.hasIcon ? 24 : 32)}px;
   justify-content: center;
   align-items: center;
+  min-height: 32px;
 
-  ${props => props.hasIcon && props.hasText && "padding-left: 4px;"};
-  ${props => props.hasIcon && !props.hasText && "padding: 0 4px;"};
+  ${(props) => props.hasIcon && props.hasText && "padding-left: 4px;"};
+  ${(props) => props.hasIcon && !props.hasText && "padding: 0 4px;"};
 `;
 
-export type Props = {
-  type?: string,
+export type Props = {|
+  type?: "button" | "submit",
   value?: string,
   icon?: React.Node,
   iconColor?: string,
@@ -126,8 +117,22 @@ export type Props = {
   children?: React.Node,
   innerRef?: React.ElementRef<any>,
   disclosure?: boolean,
+  neutral?: boolean,
+  danger?: boolean,
+  primary?: boolean,
+  disabled?: boolean,
+  fullwidth?: boolean,
+  autoFocus?: boolean,
+  style?: Object,
+  as?: React.ComponentType<any>,
+  to?: string,
+  onClick?: (event: SyntheticEvent<>) => mixed,
   borderOnHover?: boolean,
-};
+
+  "data-on"?: string,
+  "data-event-category"?: string,
+  "data-event-action"?: string,
+|};
 
 function Button({
   type = "text",
@@ -136,13 +141,14 @@ function Button({
   value,
   disclosure,
   innerRef,
+  neutral,
   ...rest
 }: Props) {
   const hasText = children !== undefined || value !== undefined;
   const hasIcon = icon !== undefined;
 
   return (
-    <RealButton type={type} ref={innerRef} {...rest}>
+    <RealButton type={type} ref={innerRef} $neutral={neutral} {...rest}>
       <Inner hasIcon={hasIcon} hasText={hasText} disclosure={disclosure}>
         {hasIcon && icon}
         {hasText && <Label hasIcon={hasIcon}>{children || value}</Label>}
@@ -152,7 +158,6 @@ function Button({
   );
 }
 
-// $FlowFixMe - need to upgrade to get forwardRef
-export default React.forwardRef((props, ref) => (
+export default React.forwardRef<Props, typeof Button>((props, ref) => (
   <Button {...props} innerRef={ref} />
 ));

@@ -1,72 +1,118 @@
 // @flow
+import { observer } from "mobx-react";
 import * as React from "react";
-import { withRouter, type RouterHistory } from "react-router-dom";
-import { observable } from "mobx";
-import { inject, observer } from "mobx-react";
-import Button from "components/Button";
-import Flex from "shared/components/Flex";
-import HelpText from "components/HelpText";
+import { useTranslation, Trans } from "react-i18next";
+import { useHistory } from "react-router-dom";
 import Document from "models/Document";
-import DocumentsStore from "stores/DocumentsStore";
-import UiStore from "stores/UiStore";
-import { collectionUrl } from "utils/routeHelpers";
+import Button from "components/Button";
+import Flex from "components/Flex";
+import HelpText from "components/HelpText";
+import useStores from "hooks/useStores";
+import { collectionUrl, documentUrl } from "utils/routeHelpers";
 
 type Props = {
-  history: RouterHistory,
   document: Document,
-  documents: DocumentsStore,
-  ui: UiStore,
   onSubmit: () => void,
 };
 
-@observer
-class DocumentDelete extends React.Component<Props> {
-  @observable isDeleting: boolean;
+function DocumentDelete({ document, onSubmit }: Props) {
+  const { t } = useTranslation();
+  const { ui, documents } = useStores();
+  const history = useHistory();
+  const [isDeleting, setDeleting] = React.useState(false);
+  const [isArchiving, setArchiving] = React.useState(false);
+  const { showToast } = ui;
+  const canArchive = !document.isDraft && !document.isArchived;
 
-  handleSubmit = async (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    this.isDeleting = true;
+  const handleSubmit = React.useCallback(
+    async (ev: SyntheticEvent<>) => {
+      ev.preventDefault();
+      setDeleting(true);
 
-    try {
-      await this.props.document.delete();
-      if (this.props.ui.activeDocumentId === this.props.document.id) {
-        this.props.history.push(
-          collectionUrl(this.props.document.collectionId)
-        );
+      try {
+        await document.delete();
+
+        // only redirect if we're currently viewing the document that's deleted
+        if (ui.activeDocumentId === document.id) {
+          // If the document has a parent and it's available in the store then
+          // redirect to it
+          if (document.parentDocumentId) {
+            const parent = documents.get(document.parentDocumentId);
+            if (parent) {
+              history.push(documentUrl(parent));
+              return;
+            }
+          }
+
+          // otherwise, redirect to the collection home
+          history.push(collectionUrl(document.collectionId));
+        }
+        onSubmit();
+      } catch (err) {
+        showToast(err.message, { type: "error" });
+      } finally {
+        setDeleting(false);
       }
-      this.props.onSubmit();
-    } catch (err) {
-      this.props.ui.showToast(err.message);
-    } finally {
-      this.isDeleting = false;
-    }
-  };
+    },
+    [showToast, onSubmit, ui, document, documents, history]
+  );
 
-  render() {
-    const { document } = this.props;
+  const handleArchive = React.useCallback(
+    async (ev: SyntheticEvent<>) => {
+      ev.preventDefault();
+      setArchiving(true);
 
-    return (
-      <Flex column>
-        <form onSubmit={this.handleSubmit}>
+      try {
+        await document.archive();
+        onSubmit();
+      } catch (err) {
+        showToast(err.message, { type: "error" });
+      } finally {
+        setArchiving(false);
+      }
+    },
+    [showToast, onSubmit, document]
+  );
+
+  return (
+    <Flex column>
+      <form onSubmit={handleSubmit}>
+        <HelpText>
+          {document.isTemplate ? (
+            <Trans
+              defaults="Are you sure you want to delete the <em>{{ documentTitle }}</em> template?"
+              values={{ documentTitle: document.titleWithDefault }}
+              components={{ em: <strong /> }}
+            />
+          ) : (
+            <Trans
+              defaults="Are you sure about that? Deleting the <em>{{ documentTitle }}</em> document will delete all of its history and any nested documents."
+              values={{ documentTitle: document.titleWithDefault }}
+              components={{ em: <strong /> }}
+            />
+          )}
+        </HelpText>
+        {canArchive && (
           <HelpText>
-            Are you sure about that? Deleting the{" "}
-            <strong>{document.title}</strong> document will delete all of its
-            history, and any nested documents.
+            <Trans>
+              If you’d like the option of referencing or restoring the{" "}
+              {{ noun: document.noun }} in the future, consider archiving it
+              instead.
+            </Trans>
           </HelpText>
-          {!document.isDraft &&
-            !document.isArchived && (
-              <HelpText>
-                If you’d like the option of referencing or restoring this
-                document in the future, consider archiving it instead.
-              </HelpText>
-            )}
-          <Button type="submit" danger>
-            {this.isDeleting ? "Deleting…" : "I’m sure – Delete"}
+        )}
+        <Button type="submit" danger>
+          {isDeleting ? `${t("Deleting")}…` : t("I’m sure – Delete")}
+        </Button>
+        &nbsp;&nbsp;
+        {canArchive && (
+          <Button type="button" onClick={handleArchive} neutral>
+            {isArchiving ? `${t("Archiving")}…` : t("Archive")}
           </Button>
-        </form>
-      </Flex>
-    );
-  }
+        )}
+      </form>
+    </Flex>
+  );
 }
 
-export default inject("documents", "ui")(withRouter(DocumentDelete));
+export default observer(DocumentDelete);

@@ -1,158 +1,220 @@
 // @flow
+import { observer } from "mobx-react";
 import * as React from "react";
-import { observable } from "mobx";
-import { inject, observer } from "mobx-react";
-import { withRouter, type RouterHistory } from "react-router-dom";
-import Modal from "components/Modal";
-import VisuallyHidden from "components/VisuallyHidden";
-import CollectionMembers from "scenes/CollectionMembers";
-
-import { newDocumentUrl } from "utils/routeHelpers";
-import getDataTransferFiles from "utils/getDataTransferFiles";
-import importFile from "utils/importFile";
+import { useTranslation } from "react-i18next";
+import { useHistory } from "react-router-dom";
+import { useMenuState, MenuButton } from "reakit/Menu";
+import { VisuallyHidden } from "reakit/VisuallyHidden";
 import Collection from "models/Collection";
-import UiStore from "stores/UiStore";
-import DocumentsStore from "stores/DocumentsStore";
-import PoliciesStore from "stores/PoliciesStore";
-import { DropdownMenu, DropdownMenuItem } from "components/DropdownMenu";
+import CollectionDelete from "scenes/CollectionDelete";
+import CollectionEdit from "scenes/CollectionEdit";
+import CollectionExport from "scenes/CollectionExport";
+import CollectionMembers from "scenes/CollectionMembers";
+import ContextMenu from "components/ContextMenu";
+import OverflowMenuButton from "components/ContextMenu/OverflowMenuButton";
+import Template from "components/ContextMenu/Template";
+import Modal from "components/Modal";
+import useStores from "hooks/useStores";
+import getDataTransferFiles from "utils/getDataTransferFiles";
+import { newDocumentUrl } from "utils/routeHelpers";
 
-type Props = {
-  position?: "left" | "right" | "center",
-  ui: UiStore,
-  policies: PoliciesStore,
-  documents: DocumentsStore,
+type Props = {|
   collection: Collection,
-  history: RouterHistory,
+  placement?: string,
+  modal?: boolean,
+  label?: (any) => React.Node,
   onOpen?: () => void,
   onClose?: () => void,
-};
+|};
 
-@observer
-class CollectionMenu extends React.Component<Props> {
-  file: ?HTMLInputElement;
-  @observable membersModalOpen: boolean = false;
+function CollectionMenu({
+  collection,
+  label,
+  modal = true,
+  placement,
+  onOpen,
+  onClose,
+}: Props) {
+  const menu = useMenuState({ modal, placement });
+  const [renderModals, setRenderModals] = React.useState(false);
+  const { ui, documents, policies } = useStores();
+  const { t } = useTranslation();
+  const history = useHistory();
 
-  onNewDocument = (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    const { collection } = this.props;
-    this.props.history.push(newDocumentUrl(collection.id));
-  };
+  const file = React.useRef<?HTMLInputElement>();
+  const [showCollectionMembers, setShowCollectionMembers] = React.useState(
+    false
+  );
+  const [showCollectionEdit, setShowCollectionEdit] = React.useState(false);
+  const [showCollectionDelete, setShowCollectionDelete] = React.useState(false);
+  const [showCollectionExport, setShowCollectionExport] = React.useState(false);
 
-  onImportDocument = (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    // simulate a click on the file upload input element
-    if (this.file) this.file.click();
-  };
-
-  onFilePicked = async (ev: SyntheticEvent<>) => {
-    const files = getDataTransferFiles(ev);
-
-    try {
-      const document = await importFile({
-        file: files[0],
-        documents: this.props.documents,
-        collectionId: this.props.collection.id,
-      });
-      this.props.history.push(document.url);
-    } catch (err) {
-      this.props.ui.showToast(err.message);
+  const handleOpen = React.useCallback(() => {
+    setRenderModals(true);
+    if (onOpen) {
+      onOpen();
     }
-  };
+  }, [onOpen]);
 
-  onEdit = (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    const { collection } = this.props;
-    this.props.ui.setActiveModal("collection-edit", { collection });
-  };
+  const handleNewDocument = React.useCallback(
+    (ev: SyntheticEvent<>) => {
+      ev.preventDefault();
+      history.push(newDocumentUrl(collection.id));
+    },
+    [history, collection.id]
+  );
 
-  onDelete = (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    const { collection } = this.props;
-    this.props.ui.setActiveModal("collection-delete", { collection });
-  };
+  const handleImportDocument = React.useCallback(
+    (ev: SyntheticEvent<>) => {
+      ev.preventDefault();
+      ev.stopPropagation();
 
-  onExport = (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    const { collection } = this.props;
-    this.props.ui.setActiveModal("collection-export", { collection });
-  };
+      // simulate a click on the file upload input element
+      if (file.current) {
+        file.current.click();
+      }
+    },
+    [file]
+  );
 
-  onPermissions = (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    this.membersModalOpen = true;
-  };
+  const handleFilePicked = React.useCallback(
+    async (ev: SyntheticEvent<>) => {
+      const files = getDataTransferFiles(ev);
 
-  handleMembersModalClose = () => {
-    this.membersModalOpen = false;
-  };
+      try {
+        const file = files[0];
+        const document = await documents.import(file, null, collection.id, {
+          publish: true,
+        });
+        history.push(document.url);
+      } catch (err) {
+        ui.showToast(err.message, {
+          type: "error",
+        });
 
-  render() {
-    const { policies, collection, position, onOpen, onClose } = this.props;
-    const can = policies.abilities(collection.id);
+        throw err;
+      }
+    },
+    [history, ui, collection.id, documents]
+  );
 
-    return (
-      <React.Fragment>
-        <VisuallyHidden>
-          <input
-            type="file"
-            ref={ref => (this.file = ref)}
-            onChange={this.onFilePicked}
-            onClick={ev => ev.stopPropagation()}
-            accept="text/markdown, text/plain"
-          />
-        </VisuallyHidden>
+  const can = policies.abilities(collection.id);
 
-        <Modal
-          title="Collection permissions"
-          onRequestClose={this.handleMembersModalClose}
-          isOpen={this.membersModalOpen}
-        >
-          <CollectionMembers
-            collection={collection}
-            onSubmit={this.handleMembersModalClose}
-            onEdit={this.onEdit}
-          />
-        </Modal>
-        <DropdownMenu onOpen={onOpen} onClose={onClose} position={position}>
-          {collection && (
-            <React.Fragment>
-              {can.update && (
-                <DropdownMenuItem onClick={this.onNewDocument}>
-                  New document
-                </DropdownMenuItem>
-              )}
-              {can.update && (
-                <DropdownMenuItem onClick={this.onImportDocument}>
-                  Import document
-                </DropdownMenuItem>
-              )}
-              {can.update && <hr />}
-              {can.update && (
-                <DropdownMenuItem onClick={this.onEdit}>Edit…</DropdownMenuItem>
-              )}
-              {can.update && (
-                <DropdownMenuItem onClick={this.onPermissions}>
-                  Permissions…
-                </DropdownMenuItem>
-              )}
-              {can.export && (
-                <DropdownMenuItem onClick={this.onExport}>
-                  Export…
-                </DropdownMenuItem>
-              )}
-            </React.Fragment>
-          )}
-          {can.delete && (
-            <DropdownMenuItem onClick={this.onDelete}>Delete…</DropdownMenuItem>
-          )}
-        </DropdownMenu>
-      </React.Fragment>
-    );
-  }
+  return (
+    <>
+      <VisuallyHidden>
+        <input
+          type="file"
+          ref={file}
+          onChange={handleFilePicked}
+          onClick={(ev) => ev.stopPropagation()}
+          accept={documents.importFileTypes.join(", ")}
+          tabIndex="-1"
+        />
+      </VisuallyHidden>
+      {label ? (
+        <MenuButton {...menu}>{label}</MenuButton>
+      ) : (
+        <OverflowMenuButton aria-label={t("Show menu")} {...menu} />
+      )}
+      <ContextMenu
+        {...menu}
+        onOpen={handleOpen}
+        onClose={onClose}
+        aria-label={t("Collection")}
+      >
+        <Template
+          {...menu}
+          items={[
+            {
+              title: t("New document"),
+              visible: can.update,
+              onClick: handleNewDocument,
+            },
+            {
+              title: t("Import document"),
+              visible: can.update,
+              onClick: handleImportDocument,
+            },
+            {
+              type: "separator",
+            },
+            {
+              title: `${t("Edit")}…`,
+              visible: can.update,
+              onClick: () => setShowCollectionEdit(true),
+            },
+            {
+              title: `${t("Permissions")}…`,
+              visible: can.update,
+              onClick: () => setShowCollectionMembers(true),
+            },
+            {
+              title: `${t("Export")}…`,
+              visible: !!(collection && can.export),
+              onClick: () => setShowCollectionExport(true),
+            },
+            {
+              type: "separator",
+            },
+            {
+              type: "separator",
+            },
+            {
+              title: `${t("Delete")}…`,
+              visible: !!(collection && can.delete),
+              onClick: () => setShowCollectionDelete(true),
+            },
+          ]}
+        />
+      </ContextMenu>
+      {renderModals && (
+        <>
+          <Modal
+            title={t("Collection permissions")}
+            onRequestClose={() => setShowCollectionMembers(false)}
+            isOpen={showCollectionMembers}
+          >
+            <CollectionMembers
+              collection={collection}
+              onSubmit={() => setShowCollectionMembers(false)}
+              onEdit={() => setShowCollectionEdit(true)}
+            />
+          </Modal>
+          <Modal
+            title={t("Edit collection")}
+            isOpen={showCollectionEdit}
+            onRequestClose={() => setShowCollectionEdit(false)}
+          >
+            <CollectionEdit
+              onSubmit={() => setShowCollectionEdit(false)}
+              collection={collection}
+            />
+          </Modal>
+          <Modal
+            title={t("Delete collection")}
+            isOpen={showCollectionDelete}
+            onRequestClose={() => setShowCollectionDelete(false)}
+          >
+            <CollectionDelete
+              onSubmit={() => setShowCollectionDelete(false)}
+              collection={collection}
+            />
+          </Modal>
+          <Modal
+            title={t("Export collection")}
+            isOpen={showCollectionExport}
+            onRequestClose={() => setShowCollectionExport(false)}
+          >
+            <CollectionExport
+              onSubmit={() => setShowCollectionExport(false)}
+              collection={collection}
+            />
+          </Modal>
+        </>
+      )}
+    </>
+  );
 }
 
-export default inject("ui", "documents", "policies")(
-  withRouter(CollectionMenu)
-);
+export default observer(CollectionMenu);

@@ -4,9 +4,11 @@ import { sequelize } from "../sequelize";
 
 export function flushdb() {
   const sql = sequelize.getQueryInterface();
-  const tables = Object.keys(sequelize.models).map(model => {
+  const tables = Object.keys(sequelize.models).map((model) => {
     const n = sequelize.models[model].getTableName();
-    return sql.quoteTable(typeof n === "string" ? n : n.tableName);
+    return sql.queryGenerator.quoteTable(
+      typeof n === "string" ? n : n.tableName
+    );
   });
 
   const query = `TRUNCATE ${tables.join(", ")} CASCADE`;
@@ -59,21 +61,20 @@ const seed = async () => {
     name: "Collection",
     urlId: "collection",
     teamId: team.id,
-    creatorId: user.id,
-    type: "atlas",
+    createdById: user.id,
   });
 
   const document = await Document.create({
     parentDocumentId: null,
     collectionId: collection.id,
     teamId: team.id,
-    userId: collection.creatorId,
-    lastModifiedById: collection.creatorId,
-    createdById: collection.creatorId,
+    userId: collection.createdById,
+    lastModifiedById: collection.createdById,
+    createdById: collection.createdById,
     title: "First ever document",
     text: "# Much test support",
   });
-  await document.publish();
+  await document.publish(collection.createdById);
   await collection.reload();
 
   return {

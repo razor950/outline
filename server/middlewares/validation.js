@@ -1,8 +1,8 @@
 // @flow
-import validator from "validator";
 import { type Context } from "koa";
-import { ParamRequiredError, ValidationError } from "../errors";
+import validator from "validator";
 import { validateColorHex } from "../../shared/utils/color";
+import { ParamRequiredError, ValidationError } from "../errors";
 
 export default function validation() {
   return function validationMiddleware(ctx: Context, next: () => Promise<*>) {
@@ -37,7 +37,7 @@ export default function validation() {
     };
 
     ctx.assertPositiveInteger = (value, message) => {
-      if (!validator.isInt(value, { min: 0 })) {
+      if (!validator.isInt(String(value), { min: 0 })) {
         throw new ValidationError(message);
       }
     };

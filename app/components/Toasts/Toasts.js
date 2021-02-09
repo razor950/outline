@@ -1,40 +1,34 @@
 // @flow
+import { observer } from "mobx-react";
 import * as React from "react";
-import { observer, inject } from "mobx-react";
 import styled from "styled-components";
 import Toast from "./components/Toast";
-import UiStore from "../../stores/UiStore";
+import useStores from "hooks/useStores";
 
-type Props = {
-  ui: UiStore,
-};
-@observer
-class Toasts extends React.Component<Props> {
-  render() {
-    const { ui } = this.props;
+function Toasts() {
+  const { ui } = useStores();
 
-    return (
-      <List>
-        {ui.orderedToasts.map(toast => (
-          <Toast
-            key={toast.id}
-            toast={toast}
-            onRequestClose={() => ui.removeToast(toast.id)}
-          />
-        ))}
-      </List>
-    );
-  }
+  return (
+    <List>
+      {ui.orderedToasts.map((toast) => (
+        <Toast
+          key={toast.id}
+          toast={toast}
+          onRequestClose={() => ui.removeToast(toast.id)}
+        />
+      ))}
+    </List>
+  );
 }
 
 const List = styled.ol`
   position: fixed;
-  left: ${props => props.theme.hpadding};
-  bottom: ${props => props.theme.vpadding};
+  left: ${(props) => props.theme.hpadding};
+  bottom: ${(props) => props.theme.vpadding};
   list-style: none;
   margin: 0;
   padding: 0;
-  z-index: 1000;
+  z-index: ${(props) => props.theme.depths.toasts};
 `;
 
-export default inject("ui")(Toasts);
+export default observer(Toasts);

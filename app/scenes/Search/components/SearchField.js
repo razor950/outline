@@ -1,13 +1,15 @@
 // @flow
+import { SearchIcon } from "outline-icons";
 import * as React from "react";
 import styled, { withTheme } from "styled-components";
-import { SearchIcon } from "outline-icons";
-import Flex from "shared/components/Flex";
+import Flex from "components/Flex";
+import { type Theme } from "types";
 
 type Props = {
-  onChange: string => void,
+  onChange: (string) => void,
   defaultValue?: string,
-  theme: Object,
+  placeholder?: string,
+  theme: Theme,
 };
 
 class SearchField extends React.Component<Props> {
@@ -40,10 +42,10 @@ class SearchField extends React.Component<Props> {
         />
         <StyledInput
           {...this.props}
-          ref={ref => (this.input = ref)}
+          ref={(ref) => (this.input = ref)}
           onChange={this.handleChange}
           spellCheck="false"
-          placeholder="Search…"
+          placeholder={this.props.placeholder}
           type="search"
           autoFocus
         />
@@ -64,26 +66,26 @@ const StyledInput = styled.input`
   font-weight: 400;
   outline: none;
   border: 0;
-  background: ${props => props.theme.sidebarBackground};
-  transition: ${props => props.theme.backgroundTransition};
+  background: ${(props) => props.theme.sidebarBackground};
+  transition: ${(props) => props.theme.backgroundTransition};
   border-radius: 4px;
 
-  color: ${props => props.theme.text};
+  color: ${(props) => props.theme.text};
 
   ::-webkit-search-cancel-button {
-    -webkit-appearance: searchfield-cancel-button;
+    -webkit-appearance: none;
   }
   ::-webkit-input-placeholder {
-    color: ${props => props.theme.placeholder};
+    color: ${(props) => props.theme.placeholder};
   }
   :-moz-placeholder {
-    color: ${props => props.theme.placeholder};
+    color: ${(props) => props.theme.placeholder};
   }
   ::-moz-placeholder {
-    color: ${props => props.theme.placeholder};
+    color: ${(props) => props.theme.placeholder};
   }
   :-ms-input-placeholder {
-    color: ${props => props.theme.placeholder};
+    color: ${(props) => props.theme.placeholder};
   }
 `;
 

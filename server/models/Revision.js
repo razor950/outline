@@ -1,6 +1,6 @@
 // @flow
-import { DataTypes, sequelize } from "../sequelize";
 import MarkdownSerializer from "slate-md-serializer";
+import { DataTypes, sequelize } from "../sequelize";
 
 const serializer = new MarkdownSerializer();
 
@@ -21,7 +21,7 @@ const Revision = sequelize.define("revision", {
   backup: DataTypes.TEXT,
 });
 
-Revision.associate = models => {
+Revision.associate = (models) => {
   Revision.belongsTo(models.Document, {
     as: "document",
     foreignKey: "documentId",
@@ -40,7 +40,31 @@ Revision.associate = models => {
   );
 };
 
-Revision.prototype.migrateVersion = function() {
+Revision.findLatest = function (documentId) {
+  return Revision.findOne({
+    where: {
+      documentId,
+    },
+    order: [["createdAt", "DESC"]],
+  });
+};
+
+Revision.createFromDocument = function (document) {
+  return Revision.create({
+    title: document.title,
+    text: document.text,
+    userId: document.lastModifiedById,
+    editorVersion: document.editorVersion,
+    version: document.version,
+    documentId: document.id,
+
+    // revision time is set to the last time document was touched as this
+    // handler can be debounced in the case of an update
+    createdAt: document.updatedAt,
+  });
+};
+
+Revision.prototype.migrateVersion = function () {
   let migrated = false;
 
   // migrate from document version 0 -> 1

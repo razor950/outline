@@ -1,31 +1,33 @@
 // @flow
-import * as React from "react";
-import debug from "debug";
 import * as Sentry from "@sentry/node";
+import debug from "debug";
 import nodemailer from "nodemailer";
 import Oy from "oy-vey";
-import { createQueue } from "./utils/queue";
-import { baseStyles } from "./emails/components/EmailLayout";
-import { WelcomeEmail, welcomeEmailText } from "./emails/WelcomeEmail";
-import { ExportEmail, exportEmailText } from "./emails/ExportEmail";
-import { SigninEmail, signinEmailText } from "./emails/SigninEmail";
-import {
-  type Props as InviteEmailT,
-  InviteEmail,
-  inviteEmailText,
-} from "./emails/InviteEmail";
-import {
-  type Props as DocumentNotificationEmailT,
-  DocumentNotificationEmail,
-  documentNotificationEmailText,
-} from "./emails/DocumentNotificationEmail";
+import * as React from "react";
 import {
   type Props as CollectionNotificationEmailT,
   CollectionNotificationEmail,
   collectionNotificationEmailText,
 } from "./emails/CollectionNotificationEmail";
+import {
+  type Props as DocumentNotificationEmailT,
+  DocumentNotificationEmail,
+  documentNotificationEmailText,
+} from "./emails/DocumentNotificationEmail";
+import { ExportEmail, exportEmailText } from "./emails/ExportEmail";
+import {
+  type Props as InviteEmailT,
+  InviteEmail,
+  inviteEmailText,
+} from "./emails/InviteEmail";
+import { SigninEmail, signinEmailText } from "./emails/SigninEmail";
+import { WelcomeEmail, welcomeEmailText } from "./emails/WelcomeEmail";
+import { baseStyles } from "./emails/components/EmailLayout";
+import { createQueue } from "./utils/queue";
 
 const log = debug("emails");
+const useTestEmailService =
+  process.env.NODE_ENV !== "production" && !process.env.SMTP_USERNAME;
 
 type Emails = "welcome" | "export";
 
@@ -73,7 +75,7 @@ export class Mailer {
 
       try {
         log(`Sending email "${data.title}" to ${data.to}`);
-        await transporter.sendMail({
+        const info = await transporter.sendMail({
           from: process.env.SMTP_FROM_EMAIL,
           replyTo: process.env.SMTP_REPLY_EMAIL || process.env.SMTP_FROM_EMAIL,
           to: data.to,
@@ -82,6 +84,10 @@ export class Mailer {
           text: data.text,
           attachments: data.attachments,
         });
+
+        if (useTestEmailService) {
+          log("Email Preview URL: %s", nodemailer.getTestMessageUrl(info));
+        }
       } catch (err) {
         if (process.env.SENTRY_DSN) {
           Sentry.captureException(err);
@@ -116,9 +122,7 @@ export class Mailer {
   invite = async (opts: { to: string } & InviteEmailT) => {
     this.sendMail({
       to: opts.to,
-      title: `${opts.actorName} invited you to join ${
-        opts.teamName
-      }’s knowledgebase`,
+      title: `${opts.actorName} invited you to join ${opts.teamName}’s knowledge base`,
       previewText:
         "Outline is a place for your team to build and share knowledge.",
       html: <InviteEmail {...opts} />,
@@ -161,6 +165,10 @@ export class Mailer {
   };
 
   constructor() {
+    this.loadTransport();
+  }
+
+  async loadTransport() {
     if (process.env.SMTP_HOST) {
       let smtpConfig = {
         host: process.env.SMTP_HOST,
@@ -175,6 +183,24 @@ export class Mailer {
           pass: process.env.SMTP_PASSWORD,
         };
       }
+
+      this.transporter = nodemailer.createTransport(smtpConfig);
+      return;
+    }
+
+    if (useTestEmailService) {
+      log("SMTP_USERNAME not provided, generating test account…");
+      let testAccount = await nodemailer.createTestAccount();
+
+      const smtpConfig = {
+        host: "smtp.ethereal.email",
+        port: 587,
+        secure: false,
+        auth: {
+          user: testAccount.user,
+          pass: testAccount.pass,
+        },
+      };
 
       this.transporter = nodemailer.createTransport(smtpConfig);
     }

@@ -1,10 +1,10 @@
 // @flow
-import { find, concat, remove, uniq } from "lodash";
-import slug from "slug";
+import { find, findIndex, concat, remove, uniq } from "lodash";
 import randomstring from "randomstring";
-import { DataTypes, sequelize } from "../sequelize";
-import Document from "./Document";
+import slug from "slug";
+import { Op, DataTypes, sequelize } from "../sequelize";
 import CollectionUser from "./CollectionUser";
+import Document from "./Document";
 
 slug.defaults.mode = "rfc3986";
 
@@ -23,13 +23,28 @@ const Collection = sequelize.define(
     color: DataTypes.STRING,
     private: DataTypes.BOOLEAN,
     maintainerApprovalRequired: DataTypes.BOOLEAN,
-    type: {
-      type: DataTypes.STRING,
-      validate: { isIn: [["atlas", "journal"]] },
-    },
-
-    /* type: atlas */
     documentStructure: DataTypes.JSONB,
+    sort: {
+      type: DataTypes.JSONB,
+      validate: {
+        isSort(value) {
+          if (
+            typeof value !== "object" ||
+            !value.direction ||
+            !value.field ||
+            Object.keys(value).length !== 2
+          ) {
+            throw new Error("Sort must be an object with field,direction");
+          }
+          if (!["asc", "desc"].includes(value.direction)) {
+            throw new Error("Sort direction must be one of asc,desc");
+          }
+          if (!["title", "index"].includes(value.field)) {
+            throw new Error("Sort field must be one of title,index");
+          }
+        },
+      },
+    },
   },
   {
     tableName: "collections",
@@ -47,7 +62,12 @@ const Collection = sequelize.define(
   }
 );
 
-Collection.addHook("beforeSave", async model => {
+Collection.DEFAULT_SORT = {
+  field: "index",
+  direction: "asc",
+};
+
+Collection.addHook("beforeSave", async (model) => {
   if (model.icon === "collection") {
     model.icon = null;
   }
@@ -55,7 +75,7 @@ Collection.addHook("beforeSave", async model => {
 
 // Class methods
 
-Collection.associate = models => {
+Collection.associate = (models) => {
   Collection.hasMany(models.Document, {
     as: "documents",
     foreignKey: "collectionId",
@@ -83,12 +103,12 @@ Collection.associate = models => {
   });
   Collection.belongsTo(models.User, {
     as: "user",
-    foreignKey: "creatorId",
+    foreignKey: "createdById",
   });
   Collection.belongsTo(models.Team, {
     as: "team",
   });
-  Collection.addScope("withMembership", userId => ({
+  Collection.addScope("withMembership", (userId) => ({
     include: [
       {
         model: models.CollectionUser,
@@ -162,6 +182,9 @@ Collection.addHook("afterDestroy", async (model: Collection) => {
   await Document.destroy({
     where: {
       collectionId: model.id,
+      archivedAt: {
+        [Op.eq]: null,
+      },
     },
   });
 });
@@ -171,11 +194,11 @@ Collection.addHook("afterCreate", (model: Collection, options) => {
     return CollectionUser.findOrCreate({
       where: {
         collectionId: model.id,
-        userId: model.creatorId,
+        userId: model.createdById,
       },
       defaults: {
         permission: "read_write",
-        createdById: model.creatorId,
+        createdById: model.createdById,
       },
       transaction: options.transaction,
     });
@@ -191,20 +214,20 @@ Collection.membershipUserIds = async (collectionId: string) => {
   );
 
   const groupMemberships = collection.collectionGroupMemberships
-    .map(cgm => cgm.group.groupMemberships)
+    .map((cgm) => cgm.group.groupMemberships)
     .flat();
 
   const membershipUserIds = concat(
     groupMemberships,
     collection.memberships
-  ).map(membership => membership.userId);
+  ).map((membership) => membership.userId);
 
   return uniq(membershipUserIds);
 };
 
 // Instance methods
 
-Collection.prototype.addDocumentToStructure = async function(
+Collection.prototype.addDocumentToStructure = async function (
   document: Document,
   index: number,
   options = {}
@@ -237,8 +260,8 @@ Collection.prototype.addDocumentToStructure = async function(
       );
     } else {
       // Recursively place document
-      const placeDocument = documentList => {
-        return documentList.map(childDocument => {
+      const placeDocument = (documentList) => {
+        return documentList.map((childDocument) => {
           if (document.parentDocumentId === childDocument.id) {
             childDocument.children.splice(
               index !== undefined ? index : childDocument.children.length,
@@ -256,11 +279,13 @@ Collection.prototype.addDocumentToStructure = async function(
     }
 
     // Sequelize doesn't seem to set the value with splice on JSONB field
-    this.documentStructure = this.documentStructure;
+    // https://github.com/sequelize/sequelize/blob/e1446837196c07b8ff0c23359b958d68af40fd6d/src/model.js#L3937
+    this.changed("documentStructure", true);
 
     if (options.save !== false) {
       await this.save({
         ...options,
+        fields: ["documentStructure"],
         transaction,
       });
       if (transaction) {
@@ -280,7 +305,7 @@ Collection.prototype.addDocumentToStructure = async function(
 /**
  * Update document's title and url in the documentStructure
  */
-Collection.prototype.updateDocument = async function(
+Collection.prototype.updateDocument = async function (
   updatedDocument: Document
 ) {
   if (!this.documentStructure) return;
@@ -293,8 +318,8 @@ Collection.prototype.updateDocument = async function(
 
     const { id } = updatedDocument;
 
-    const updateChildren = documents => {
-      return documents.map(document => {
+    const updateChildren = (documents) => {
+      return documents.map((document) => {
         if (document.id === id) {
           document = {
             ...updatedDocument.toJSON(),
@@ -308,7 +333,12 @@ Collection.prototype.updateDocument = async function(
     };
 
     this.documentStructure = updateChildren(this.documentStructure);
-    await this.save({ transaction });
+
+    // Sequelize doesn't seem to set the value with splice on JSONB field
+    // https://github.com/sequelize/sequelize/blob/e1446837196c07b8ff0c23359b958d68af40fd6d/src/model.js#L3937
+    this.changed("documentStructure", true);
+
+    await this.save({ fields: ["documentStructure"], transaction });
     await transaction.commit();
   } catch (err) {
     if (transaction) {
@@ -320,12 +350,12 @@ Collection.prototype.updateDocument = async function(
   return this;
 };
 
-Collection.prototype.deleteDocument = async function(document) {
+Collection.prototype.deleteDocument = async function (document) {
   await this.removeDocumentInStructure(document);
   await document.deleteWithChildren();
 };
 
-Collection.prototype.removeDocumentInStructure = async function(
+Collection.prototype.removeDocumentInStructure = async function (
   document,
   options
 ) {
@@ -339,7 +369,7 @@ Collection.prototype.removeDocumentInStructure = async function(
 
     const removeFromChildren = async (children, id) => {
       children = await Promise.all(
-        children.map(async childDocument => {
+        children.map(async (childDocument) => {
           return {
             ...childDocument,
             children: await removeFromChildren(childDocument.children, id),
@@ -349,7 +379,7 @@ Collection.prototype.removeDocumentInStructure = async function(
 
       const match = find(children, { id });
       if (match) {
-        if (!returnValue) returnValue = match;
+        if (!returnValue) returnValue = [match, findIndex(children, { id })];
         remove(children, { id });
       }
 
@@ -361,10 +391,11 @@ Collection.prototype.removeDocumentInStructure = async function(
       document.id
     );
 
-    await this.save({
-      ...options,
-      transaction,
-    });
+    // Sequelize doesn't seem to set the value with splice on JSONB field
+    // https://github.com/sequelize/sequelize/blob/e1446837196c07b8ff0c23359b958d68af40fd6d/src/model.js#L3937
+    this.changed("documentStructure", true);
+
+    await this.save({ ...options, fields: ["documentStructure"], transaction });
     await transaction.commit();
   } catch (err) {
     if (transaction) {

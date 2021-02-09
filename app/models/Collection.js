@@ -1,10 +1,10 @@
 // @flow
-import { pick } from "lodash";
+import { pick, trim } from "lodash";
 import { action, computed, observable } from "mobx";
 import BaseModel from "models/BaseModel";
 import Document from "models/Document";
-import { client } from "utils/ApiClient";
 import type { NavigationNode } from "types";
+import { client } from "utils/ApiClient";
 
 export default class Collection extends BaseModel {
   @observable isSaving: boolean;
@@ -16,11 +16,11 @@ export default class Collection extends BaseModel {
   icon: string;
   color: string;
   private: boolean;
-  type: "atlas" | "journal";
   documents: NavigationNode[];
   createdAt: ?string;
   updatedAt: ?string;
   deletedAt: ?string;
+  sort: { field: string, direction: "asc" | "desc" };
   url: string;
 
   @computed
@@ -37,7 +37,7 @@ export default class Collection extends BaseModel {
   get documentIds(): string[] {
     const results = [];
     const travelDocuments = (documentList, path) =>
-      documentList.forEach(document => {
+      documentList.forEach((document) => {
         results.push(document.id);
         travelDocuments(document.children);
       });
@@ -46,10 +46,15 @@ export default class Collection extends BaseModel {
     return results;
   }
 
+  @computed
+  get hasDescription(): boolean {
+    return !!trim(this.description, "\\").trim();
+  }
+
   @action
   updateDocument(document: Document) {
     const travelDocuments = (documentList, path) =>
-      documentList.forEach(d => {
+      documentList.forEach((d) => {
         if (d.id === document.id) {
           d.title = document.title;
           d.url = document.url;
@@ -63,8 +68,8 @@ export default class Collection extends BaseModel {
 
   getDocumentChildren(documentId: string): NavigationNode[] {
     let result = [];
-    const traveler = nodes => {
-      nodes.forEach(childNode => {
+    const traveler = (nodes) => {
+      nodes.forEach((childNode) => {
         if (childNode.id === documentId) {
           result = childNode.children;
           return;
@@ -80,12 +85,12 @@ export default class Collection extends BaseModel {
     return result;
   }
 
-  pathToDocument(document: Document) {
+  pathToDocument(documentId: string) {
     let path;
     const traveler = (nodes, previousPath) => {
-      nodes.forEach(childNode => {
+      nodes.forEach((childNode) => {
         const newPath = [...previousPath, childNode];
-        if (childNode.id === document.id) {
+        if (childNode.id === documentId) {
           path = newPath;
           return;
         }
@@ -109,6 +114,7 @@ export default class Collection extends BaseModel {
       "description",
       "icon",
       "private",
+      "sort",
     ]);
   };
 

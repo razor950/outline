@@ -1,20 +1,20 @@
 // @flow
-import Router from "koa-router";
-import mailer from "../mailer";
 import subMinutes from "date-fns/sub_minutes";
-import { getUserForEmailSigninToken } from "../utils/jwt";
-import { User, Team } from "../models";
+import Router from "koa-router";
+import { AuthorizationError } from "../errors";
+import mailer from "../mailer";
+import auth from "../middlewares/authentication";
 import methodOverride from "../middlewares/methodOverride";
 import validation from "../middlewares/validation";
-import auth from "../middlewares/authentication";
-import { AuthorizationError } from "../errors";
+import { User, Team } from "../models";
+import { getUserForEmailSigninToken } from "../utils/jwt";
 
 const router = new Router();
 
 router.use(methodOverride());
 router.use(validation());
 
-router.post("email", async ctx => {
+router.post("email", async (ctx) => {
   const { email } = ctx.body;
 
   ctx.assertEmail(email, "email is required");
@@ -25,12 +25,19 @@ router.post("email", async ctx => {
 
   if (user) {
     const team = await Team.findByPk(user.teamId);
+    if (!team) {
+      ctx.redirect(`/?notice=auth-error`);
+      return;
+    }
 
     // If the user matches an email address associated with an SSO
     // signin then just forward them directly to that service's
     // login page
     if (user.service && user.service !== "email") {
-      return ctx.redirect(`${team.url}/auth/${user.service}`);
+      ctx.body = {
+        redirect: `${team.url}/auth/${user.service}`,
+      };
+      return;
     }
 
     if (!team.guestSignin) {
@@ -42,7 +49,11 @@ router.post("email", async ctx => {
       user.lastSigninEmailSentAt &&
       user.lastSigninEmailSentAt > subMinutes(new Date(), 2)
     ) {
-      ctx.redirect(`${team.url}?notice=email-auth-ratelimit`);
+      ctx.body = {
+        redirect: `${team.url}?notice=email-auth-ratelimit`,
+        message: "Rate limit exceeded",
+        success: false,
+      };
       return;
     }
 
@@ -55,15 +66,15 @@ router.post("email", async ctx => {
 
     user.lastSigninEmailSentAt = new Date();
     await user.save();
-
-    // respond with success regardless of whether an email was sent
-    ctx.redirect(`${team.url}?notice=guest-success`);
-  } else {
-    ctx.redirect(`${process.env.URL}?notice=guest-success`);
   }
+
+  // respond with success regardless of whether an email was sent
+  ctx.body = {
+    success: true,
+  };
 });
 
-router.get("email.callback", auth({ required: false }), async ctx => {
+router.get("email.callback", auth({ required: false }), async (ctx) => {
   const { token } = ctx.request.query;
 
   ctx.assertPresent(token, "token is required");
@@ -78,6 +89,7 @@ router.get("email.callback", auth({ required: false }), async ctx => {
 
     if (!user.service) {
       user.service = "email";
+      user.lastActiveAt = new Date();
       await user.save();
     }
 

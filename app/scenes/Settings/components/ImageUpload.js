@@ -1,21 +1,24 @@
 // @flow
-import * as React from "react";
 import { observable } from "mobx";
 import { observer, inject } from "mobx-react";
-import styled from "styled-components";
-import Dropzone from "react-dropzone";
-import LoadingIndicator from "components/LoadingIndicator";
-import Flex from "shared/components/Flex";
-import Modal from "components/Modal";
-import Button from "components/Button";
+import * as React from "react";
 import AvatarEditor from "react-avatar-editor";
-import { uploadFile, dataUrlToBlob } from "utils/uploadFile";
+import Dropzone from "react-dropzone";
+import styled from "styled-components";
 import UiStore from "stores/UiStore";
+import Button from "components/Button";
+import Flex from "components/Flex";
+import LoadingIndicator from "components/LoadingIndicator";
+import Modal from "components/Modal";
+import { compressImage } from "utils/compressImage";
+import { uploadFile, dataUrlToBlob } from "utils/uploadFile";
+
+const EMPTY_OBJECT = {};
 
 type Props = {
   children?: React.Node,
-  onSuccess: string => void | Promise<void>,
-  onError: string => void,
+  onSuccess: (string) => void | Promise<void>,
+  onError: (string) => void,
   submitText: string,
   borderRadius: number,
   ui: UiStore,
@@ -26,7 +29,7 @@ class ImageUpload extends React.Component<Props> {
   @observable isUploading: boolean = false;
   @observable isCropping: boolean = false;
   @observable zoom: number = 1;
-  file: File;
+  @observable file: File;
   avatarEditorRef: AvatarEditor;
 
   static defaultProps = {
@@ -51,7 +54,11 @@ class ImageUpload extends React.Component<Props> {
     const canvas = this.avatarEditorRef.getImage();
     const imageBlob = dataUrlToBlob(canvas.toDataURL());
     try {
-      const attachment = await uploadFile(imageBlob, {
+      const compressed = await compressImage(imageBlob, {
+        maxHeight: 512,
+        maxWidth: 512,
+      });
+      const attachment = await uploadFile(compressed, {
         name: this.file.name,
         public: true,
       });
@@ -85,7 +92,7 @@ class ImageUpload extends React.Component<Props> {
           {this.isUploading && <LoadingIndicator />}
           <AvatarEditorContainer>
             <AvatarEditor
-              ref={ref => (this.avatarEditorRef = ref)}
+              ref={(ref) => (this.avatarEditorRef = ref)}
               image={this.file}
               width={250}
               height={250}
@@ -123,12 +130,15 @@ class ImageUpload extends React.Component<Props> {
       <Dropzone
         accept="image/png, image/jpeg"
         onDropAccepted={this.onDropAccepted}
-        style={{}}
+        style={EMPTY_OBJECT}
         disablePreview
-        onSuccess={this.props.onSuccess}
-        onError={this.props.onError}
       >
-        {this.props.children}
+        {({ getRootProps, getInputProps, isDragActive }) => (
+          <div {...getRootProps()} {...{ isDragActive }}>
+            <input {...getInputProps()} />
+            {this.props.children}
+          </div>
+        )}
       </Dropzone>
     );
   }
@@ -154,7 +164,7 @@ const RangeInput = styled.input`
     height: 16px;
     width: 16px;
     border-radius: 50%;
-    background: ${props => props.theme.text};
+    background: ${(props) => props.theme.text};
     cursor: pointer;
   }
 

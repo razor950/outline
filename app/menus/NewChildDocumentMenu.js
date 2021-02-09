@@ -1,59 +1,56 @@
 // @flow
+import { observer } from "mobx-react";
 import * as React from "react";
-import { Redirect } from "react-router-dom";
-import { observable } from "mobx";
-import { observer, inject } from "mobx-react";
-import { MoreIcon } from "outline-icons";
-
-import { newDocumentUrl } from "utils/routeHelpers";
+import { useTranslation, Trans } from "react-i18next";
+import { useMenuState, MenuButton } from "reakit/Menu";
 import Document from "models/Document";
-import CollectionsStore from "stores/CollectionsStore";
-import { DropdownMenu, DropdownMenuItem } from "components/DropdownMenu";
+import ContextMenu from "components/ContextMenu";
+import Template from "components/ContextMenu/Template";
+import useStores from "hooks/useStores";
+import { newDocumentUrl } from "utils/routeHelpers";
 
 type Props = {
-  label?: React.Node,
+  label?: (any) => React.Node,
   document: Document,
-  collections: CollectionsStore,
 };
 
-@observer
-class NewChildDocumentMenu extends React.Component<Props> {
-  @observable redirectTo: ?string;
+function NewChildDocumentMenu({ document, label }: Props) {
+  const menu = useMenuState({ modal: true });
+  const { collections } = useStores();
+  const { t } = useTranslation();
+  const collection = collections.get(document.collectionId);
+  const collectionName = collection ? collection.name : t("collection");
 
-  componentDidUpdate() {
-    this.redirectTo = undefined;
-  }
-
-  handleNewDocument = () => {
-    const { document } = this.props;
-    this.redirectTo = newDocumentUrl(document.collectionId);
-  };
-
-  handleNewChild = () => {
-    const { document } = this.props;
-    this.redirectTo = newDocumentUrl(document.collectionId, document.id);
-  };
-
-  render() {
-    if (this.redirectTo) return <Redirect to={this.redirectTo} push />;
-
-    const { label, document, collections, ...rest } = this.props;
-    const collection = collections.get(document.collectionId);
-
-    return (
-      <DropdownMenu label={label || <MoreIcon />} {...rest}>
-        <DropdownMenuItem onClick={this.handleNewDocument}>
-          <span>
-            New document in{" "}
-            <strong>{collection ? collection.name : "collection"}</strong>
-          </span>
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={this.handleNewChild}>
-          New nested document
-        </DropdownMenuItem>
-      </DropdownMenu>
-    );
-  }
+  return (
+    <>
+      <MenuButton {...menu}>{label}</MenuButton>
+      <ContextMenu {...menu} aria-label={t("New child document")}>
+        <Template
+          {...menu}
+          items={[
+            {
+              title: (
+                <span>
+                  <Trans
+                    defaults="New document in <em>{{ collectionName }}</em>"
+                    values={{ collectionName }}
+                    components={{ em: <strong /> }}
+                  />
+                </span>
+              ),
+              to: newDocumentUrl(document.collectionId),
+            },
+            {
+              title: t("New nested document"),
+              to: newDocumentUrl(document.collectionId, {
+                parentDocumentId: document.id,
+              }),
+            },
+          ]}
+        />
+      </ContextMenu>
+    </>
+  );
 }
 
-export default inject("collections")(NewChildDocumentMenu);
+export default observer(NewChildDocumentMenu);

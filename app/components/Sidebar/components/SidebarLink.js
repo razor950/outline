@@ -1,103 +1,88 @@
 // @flow
 import * as React from "react";
-import { observable, action } from "mobx";
-import { observer } from "mobx-react";
-import { withRouter, NavLink } from "react-router-dom";
-import { CollapsedIcon } from "outline-icons";
+import { withRouter, type RouterHistory, type Match } from "react-router-dom";
 import styled, { withTheme } from "styled-components";
-import Flex from "shared/components/Flex";
+import breakpoint from "styled-components-breakpoint";
+import EventBoundary from "components/EventBoundary";
+import NavLink from "./NavLink";
+import { type Theme } from "types";
 
 type Props = {
   to?: string | Object,
   href?: string | Object,
+  innerRef?: (?HTMLElement) => void,
   onClick?: (SyntheticEvent<>) => void,
+  onMouseEnter?: (SyntheticEvent<>) => void,
+  className?: string,
   children?: React.Node,
   icon?: React.Node,
-  expanded?: boolean,
   label?: React.Node,
   menu?: React.Node,
-  menuOpen?: boolean,
-  hideDisclosure?: boolean,
+  showActions?: boolean,
   iconColor?: string,
   active?: boolean,
-  theme: Object,
+  isActiveDrop?: boolean,
+  history: RouterHistory,
+  match: Match,
+  theme: Theme,
   exact?: boolean,
   depth?: number,
 };
 
-@observer
-class SidebarLink extends React.Component<Props> {
-  @observable expanded: ?boolean = this.props.expanded;
-
-  style = {
-    paddingLeft: `${(this.props.depth || 0) * 16 + 16}px`,
-  };
-
-  componentWillReceiveProps(nextProps: Props) {
-    if (nextProps.expanded !== undefined) {
-      this.expanded = nextProps.expanded;
-    }
-  }
-
-  @action
-  handleClick = (ev: SyntheticEvent<>) => {
-    ev.preventDefault();
-    ev.stopPropagation();
-
-    this.expanded = !this.expanded;
-  };
-
-  @action
-  handleExpand = () => {
-    this.expanded = true;
-  };
-
-  render() {
-    const {
-      icon,
-      children,
-      onClick,
-      to,
-      label,
-      active,
-      menu,
-      menuOpen,
-      hideDisclosure,
-      exact,
-      href,
-    } = this.props;
-    const showDisclosure = !!children && !hideDisclosure;
-    const activeStyle = {
-      color: this.props.theme.text,
-      background: this.props.theme.sidebarItemBackground,
-      fontWeight: 600,
-      ...this.style,
+function SidebarLink({
+  icon,
+  children,
+  onClick,
+  onMouseEnter,
+  to,
+  label,
+  active,
+  isActiveDrop,
+  menu,
+  showActions,
+  theme,
+  exact,
+  href,
+  depth,
+  history,
+  match,
+  className,
+}: Props) {
+  const style = React.useMemo(() => {
+    return {
+      paddingLeft: `${(depth || 0) * 16 + 16}px`,
     };
+  }, [depth]);
 
-    return (
-      <Wrapper column>
-        <StyledNavLink
-          activeStyle={activeStyle}
-          style={active ? activeStyle : this.style}
-          onClick={onClick}
-          exact={exact !== false}
-          to={to}
-          as={to ? undefined : href ? "a" : "div"}
-          href={href}
-        >
-          {icon && <IconWrapper>{icon}</IconWrapper>}
-          <Label onClick={this.handleExpand}>
-            {showDisclosure && (
-              <Disclosure expanded={this.expanded} onClick={this.handleClick} />
-            )}
-            {label}
-          </Label>
-          {menu && <Action menuOpen={menuOpen}>{menu}</Action>}
-        </StyledNavLink>
-        {this.expanded && children}
-      </Wrapper>
-    );
-  }
+  const activeStyle = {
+    fontWeight: 600,
+    color: theme.text,
+    background: theme.sidebarItemBackground,
+    ...style,
+  };
+
+  const activeDropStyle = {
+    fontWeight: 600,
+  };
+
+  return (
+    <Link
+      $isActiveDrop={isActiveDrop}
+      activeStyle={isActiveDrop ? activeDropStyle : activeStyle}
+      style={active ? activeStyle : style}
+      onClick={onClick}
+      onMouseEnter={onMouseEnter}
+      exact={exact !== false}
+      to={to}
+      as={to ? undefined : href ? "a" : "div"}
+      href={href}
+      className={className}
+    >
+      {icon && <IconWrapper>{icon}</IconWrapper>}
+      <Label>{label}</Label>
+      {menu && <Actions showActions={showActions}>{menu}</Actions>}
+    </Link>
+  );
 }
 
 // accounts for whitespace around icon
@@ -105,56 +90,75 @@ const IconWrapper = styled.span`
   margin-left: -4px;
   margin-right: 4px;
   height: 24px;
+  overflow: hidden;
+  flex-shrink: 0;
 `;
 
-const Action = styled.span`
-  display: ${props => (props.menuOpen ? "inline" : "none")};
+const Actions = styled(EventBoundary)`
+  display: ${(props) => (props.showActions ? "inline-flex" : "none")};
   position: absolute;
   top: 4px;
   right: 4px;
-  color: ${props => props.theme.textTertiary};
+  color: ${(props) => props.theme.textTertiary};
+  transition: opacity 50ms;
 
   svg {
-    opacity: 0.75;
+    color: ${(props) => props.theme.textSecondary};
+    fill: currentColor;
+    opacity: 0.5;
   }
 
   &:hover {
     svg {
-      opacity: 1;
+      opacity: 0.75;
     }
   }
 `;
 
-const StyledNavLink = styled(NavLink)`
+const Link = styled(NavLink)`
   display: flex;
   position: relative;
-  overflow: hidden;
   text-overflow: ellipsis;
-  padding: 4px 16px;
+  padding: 6px 16px;
   border-radius: 4px;
-  color: ${props => props.theme.sidebarText};
+  transition: background 50ms, color 50ms;
+  background: ${(props) =>
+    props.$isActiveDrop ? props.theme.slateDark : "inherit"};
+  color: ${(props) =>
+    props.$isActiveDrop ? props.theme.white : props.theme.sidebarText};
   font-size: 15px;
   cursor: pointer;
+  overflow: hidden;
+
+  svg {
+    ${(props) => (props.$isActiveDrop ? `fill: ${props.theme.white};` : "")}
+    transition: fill 50ms;
+  }
 
   &:hover {
-    color: ${props => props.theme.text};
+    color: ${(props) =>
+      props.$isActiveDrop ? props.theme.white : props.theme.text};
   }
 
   &:focus {
-    color: ${props => props.theme.text};
-    background: ${props => props.theme.black05};
-    outline: none;
+    color: ${(props) => props.theme.text};
+    background: ${(props) => props.theme.black05};
   }
 
-  &:hover {
-    > ${Action} {
-      display: inline;
+  &:hover,
+  &:active {
+    > ${Actions} {
+      display: inline-flex;
+
+      svg {
+        opacity: 0.75;
+      }
     }
   }
-`;
 
-const Wrapper = styled(Flex)`
-  position: relative;
+  ${breakpoint("tablet")`
+    padding: 4px 16px;
+  `}
 `;
 
 const Label = styled.div`
@@ -162,13 +166,6 @@ const Label = styled.div`
   width: 100%;
   max-height: 4.8em;
   line-height: 1.6;
-`;
-
-const Disclosure = styled(CollapsedIcon)`
-  position: absolute;
-  left: -24px;
-
-  ${({ expanded }) => !expanded && "transform: rotate(-90deg);"};
 `;
 
 export default withRouter(withTheme(SidebarLink));

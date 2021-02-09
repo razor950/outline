@@ -1,28 +1,20 @@
 // @flow
-import Sequelize from "sequelize";
-import Router from "koa-router";
-import auth from "../middlewares/authentication";
 import addHours from "date-fns/add_hours";
-import { getCookieDomain } from "../../shared/utils/domains";
+import invariant from "invariant";
+import Router from "koa-router";
+import Sequelize from "sequelize";
 import { slackAuth } from "../../shared/utils/routeHelpers";
-import {
-  Authentication,
-  Collection,
-  Integration,
-  User,
-  Event,
-  Team,
-} from "../models";
+import auth from "../middlewares/authentication";
+import { Authentication, Collection, Integration, User, Team } from "../models";
 import * as Slack from "../slack";
+import { getCookieDomain } from "../utils/domains";
 
 const Op = Sequelize.Op;
 const router = new Router();
 
 // start the oauth process and redirect user to Slack
-router.get("slack", async ctx => {
-  const state = Math.random()
-    .toString(36)
-    .substring(7);
+router.get("slack", async (ctx) => {
+  const state = Math.random().toString(36).substring(7);
 
   ctx.cookies.set("state", state, {
     httpOnly: false,
@@ -33,7 +25,7 @@ router.get("slack", async ctx => {
 });
 
 // signin callback from Slack
-router.get("slack.callback", auth({ required: false }), async ctx => {
+router.get("slack.callback", auth({ required: false }), async (ctx) => {
   const { code, error, state } = ctx.request.query;
   ctx.assertPresent(code || error, "code is required");
   ctx.assertPresent(state, "state is required");
@@ -49,15 +41,24 @@ router.get("slack.callback", auth({ required: false }), async ctx => {
 
   const data = await Slack.oauthAccess(code);
 
-  const [team, isFirstUser] = await Team.findOrCreate({
-    where: {
-      slackId: data.team.id,
-    },
-    defaults: {
-      name: data.team.name,
-      avatarUrl: data.team.image_88,
-    },
-  });
+  let team, isFirstUser;
+  try {
+    [team, isFirstUser] = await Team.findOrCreate({
+      where: {
+        slackId: data.team.id,
+      },
+      defaults: {
+        name: data.team.name,
+        avatarUrl: data.team.image_88,
+      },
+    });
+  } catch (err) {
+    if (err instanceof Sequelize.UniqueConstraintError) {
+      ctx.redirect(`/?notice=auth-error`);
+      return;
+    }
+  }
+  invariant(team, "Team must exist");
 
   try {
     const [user, isFirstSignin] = await User.findOrCreate({
@@ -103,20 +104,6 @@ router.get("slack.callback", auth({ required: false }), async ctx => {
       await team.provisionSubdomain(data.team.domain);
     }
 
-    if (isFirstSignin) {
-      await Event.create({
-        name: "users.create",
-        actorId: user.id,
-        userId: user.id,
-        teamId: team.id,
-        data: {
-          name: user.name,
-          service: "slack",
-        },
-        ip: ctx.request.ip,
-      });
-    }
-
     // set cookies on response and redirect to team subdomain
     ctx.signIn(user, team, "slack", isFirstSignin);
   } catch (err) {
@@ -142,7 +129,7 @@ router.get("slack.callback", auth({ required: false }), async ctx => {
   }
 });
 
-router.get("slack.commands", auth({ required: false }), async ctx => {
+router.get("slack.commands", auth({ required: false }), async (ctx) => {
   const { code, state, error } = ctx.request.query;
   const user = ctx.state.user;
   ctx.assertPresent(code || error, "code is required");
@@ -153,7 +140,7 @@ router.get("slack.commands", auth({ required: false }), async ctx => {
   }
 
   // this code block accounts for the root domain being unable to
-  // access authentcation for subdomains. We must forward to the appropriate
+  // access authentication for subdomains. We must forward to the appropriate
   // subdomain to complete the oauth flow
   if (!user) {
     if (state) {
@@ -189,12 +176,15 @@ router.get("slack.commands", auth({ required: false }), async ctx => {
     userId: user.id,
     teamId: user.teamId,
     authenticationId: authentication.id,
+    settings: {
+      serviceTeamId: data.team_id,
+    },
   });
 
   ctx.redirect("/settings/integrations/slack");
 });
 
-router.get("slack.post", auth({ required: false }), async ctx => {
+router.get("slack.post", auth({ required: false }), async (ctx) => {
   const { code, error, state } = ctx.request.query;
   const user = ctx.state.user;
   ctx.assertPresent(code || error, "code is required");

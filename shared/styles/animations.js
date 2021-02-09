@@ -18,6 +18,18 @@ export const fadeAndScaleIn = keyframes`
   }
 `;
 
+export const fadeAndSlideIn = keyframes`
+  from {
+    opacity: 0;
+    transform: scale(.98) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0px);
+  }
+`;
+
 export const bounceIn = keyframes`
   from,
   20%,
@@ -67,4 +79,10 @@ export const pulsate = keyframes`
   0% { opacity: 1; }
   50% { opacity: 0.5; }
   100% { opacity: 1; }
+`;
+
+export const pulse = keyframes`
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
 `;

@@ -1,6 +1,7 @@
 // @flow
 import { takeRight } from "lodash";
-import { User, Document, Attachment } from "../models";
+import { Attachment, Document, User } from "../models";
+import parseAttachmentIds from "../utils/parseAttachmentIds";
 import { getSignedImageUrl } from "../utils/s3";
 import presentUser from "./user";
 
@@ -8,13 +9,9 @@ type Options = {
   isPublic?: boolean,
 };
 
-const attachmentRegex = /!\[.*\]\(\/api\/attachments\.redirect\?id=(?<id>.*)\)/gi;
-
 // replaces attachments.redirect urls with signed/authenticated url equivalents
-async function replaceImageAttachments(text) {
-  const attachmentIds = [...text.matchAll(attachmentRegex)].map(
-    match => match.groups && match.groups.id
-  );
+async function replaceImageAttachments(text: string) {
+  const attachmentIds = parseAttachmentIds(text);
 
   for (const id of attachmentIds) {
     const attachment = await Attachment.findByPk(id);
@@ -54,13 +51,20 @@ export default async function present(document: Document, options: ?Options) {
     archivedAt: document.archivedAt,
     deletedAt: document.deletedAt,
     teamId: document.teamId,
+    template: document.template,
+    templateId: document.templateId,
     collaborators: [],
     starred: document.starred ? !!document.starred.length : undefined,
     revision: document.revisionCount,
     pinned: undefined,
     collectionId: undefined,
     parentDocumentId: undefined,
+    lastViewedAt: undefined,
   };
+
+  if (!!document.views && document.views.length > 0) {
+    data.lastViewedAt = document.views[0].updatedAt;
+  }
 
   if (!options.isPublic) {
     data.pinned = !!document.pinnedById;
@@ -70,11 +74,13 @@ export default async function present(document: Document, options: ?Options) {
     data.updatedBy = presentUser(document.updatedBy);
 
     // TODO: This could be further optimized
-    data.collaborators = await User.findAll({
-      where: {
-        id: takeRight(document.collaboratorIds, 10) || [],
-      },
-    }).map(presentUser);
+    data.collaborators = (
+      await User.findAll({
+        where: {
+          id: takeRight(document.collaboratorIds, 10) || [],
+        },
+      })
+    ).map(presentUser);
   }
 
   return data;
