@@ -28,6 +28,14 @@ if (process.env.SLACK_KEY) {
   });
 }
 
+if (process.env.DISCORD_CLIENT_ID){
+  services.push({
+    id: "discord",
+    name: "Discord",
+    authUrl: signin("discord"),
+  });
+}
+
 services.push({
   id: "email",
   name: "Email",

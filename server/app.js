@@ -10,6 +10,7 @@ import helmet, {
 import logger from "koa-logger";
 import mount from "koa-mount";
 import onerror from "koa-onerror";
+import passport from 'koa-passport';
 import enforceHttps from "koa-sslify";
 import api from "./api";
 import auth from "./auth";
@@ -163,6 +164,8 @@ app.on("error", (error, ctx) => {
     console.error(error);
   }
 });
+
+app.use(passport.initialize());
 
 app.use(mount("/auth", auth));
 app.use(mount("/api", api));
