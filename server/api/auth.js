@@ -36,6 +36,14 @@ if (process.env.DISCORD_CLIENT_ID){
   });
 }
 
+if (process.env.GITHUB_CLIENT_ID) {
+  services.push({
+    id: "github",
+    name: "GitHub",
+    authUrl: signin("github"),
+  });
+}
+
 services.push({
   id: "email",
   name: "Email",
@@ -50,6 +58,12 @@ function filterServices(team) {
   }
   if (team && !team.slackId) {
     output = reject(output, (service) => service.id === "slack");
+  }
+  if(team && !team.discordId){
+    output = reject(output, (service) => service.id === "discord");
+  }
+  if (team && !team.githubId) {
+    output = reject(output, (service) => service.id === "github");
   }
   if (!team || !team.guestSignin) {
     output = reject(output, (service) => service.id === "email");

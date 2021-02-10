@@ -3,6 +3,8 @@ import { EmailIcon } from "outline-icons";
 import * as React from "react";
 import styled from "styled-components";
 import ButtonLarge from "components/ButtonLarge";
+import DiscordLogo from "components/DiscordLogo";
+import GithubLogo from "components/GithubLogo";
 import GoogleLogo from "components/GoogleLogo";
 import InputLarge from "components/InputLarge";
 import SlackLogo from "components/SlackLogo";
@@ -99,7 +101,15 @@ class Service extends React.Component<Props, State> {
     }
 
     const icon =
-      id === "slack" ? (
+    id === "discord" ? (
+      <Logo>
+        <DiscordLogo size={16} />
+      </Logo>
+      ) : id === "github" ? (
+      <Logo>
+        <GithubLogo size={16} />
+      </Logo>
+      ) : id === "slack" ? (
         <Logo>
           <SlackLogo size={16} />
         </Logo>

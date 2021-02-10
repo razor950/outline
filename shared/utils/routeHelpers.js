@@ -26,6 +26,27 @@ export function slackAuth(
   return `${baseUrl}?${urlParams}`;
 }
 
+export function githubAuth(
+  state: string,
+  scopes: string[] = ["repo", "read:org", "user"],
+  clientId: string = process.env.GITHUB_CLIENT_ID,
+  redirectUri: string = `${process.env.URL}/auth/github.callback`
+): string {
+  const baseUrl = "https://github.com/login/oauth/authorize";
+  const params = {
+    client_id: clientId,
+    scope: scopes ? scopes.join(",") : "",
+    redirect_uri: redirectUri,
+    state,
+  };
+
+  const urlParams = Object.keys(params)
+    .map((key) => `${key}=${encodeURIComponent(params[key])}`)
+    .join("&");
+
+  return `${baseUrl}?${urlParams}`;
+}
+
 export function githubUrl(): string {
   return "https://www.github.com/outline";
 }
