@@ -109,7 +109,7 @@ router.get("github.callback", auth({ required: false }), async (ctx) => {
 
     if (isFirstUser) {
       await team.provisionFirstCollection(user.id);
-      await team.provisionSubdomain(githubTeam.login);
+      //await team.provisionSubdomain(githubTeam.login);
     }
 
     if (isFirstSignin) {

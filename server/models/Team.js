@@ -54,6 +54,7 @@ const Team = sequelize.define(
     },
     slackId: { type: DataTypes.STRING, allowNull: true },
     googleId: { type: DataTypes.STRING, allowNull: true },
+    gitlabId: { type: DataTypes.STRING, allowNull: true },
     githubId: { type: DataTypes.STRING, allowNull: true },
     discordId: { type: DataTypes.STRING, allowNull: true },
     avatarUrl: { type: DataTypes.STRING, allowNull: true },

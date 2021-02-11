@@ -11,15 +11,18 @@ import { Team } from "../models";
 import email from "./email";
 import google from "./google";
 import slack from "./slack";
-import discord from './discord';
+//import discord from './discord';
+import github from './github';
+//import gitlab from './gitlab';
 
 const app = new Koa();
 const router = new Router();
 
 router.use("/", slack.routes());
 router.use("/", google.routes());
-router.use('/', discord.routes());
+//router.use('/', discord.routes());
 router.use("/", github.routes());
+//router.use('/', gitlab.routes());
 router.use("/", email.routes());
 
 

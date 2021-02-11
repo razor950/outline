@@ -47,7 +47,8 @@ passport.use(
       });
 
       if (isFirstUser) {
-        await team.createFirstCollection(user.id);
+        await team.provisionFirstCollection(user.id);
+        //await team.provisionSubdomain(guild.login);
       }
 
       done(null, user);

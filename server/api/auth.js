@@ -44,6 +44,14 @@ if (process.env.GITHUB_CLIENT_ID) {
   });
 }
 
+if (process.env.GITLAB_CLIENT_ID) {
+  services.push({
+    id: "gitlab",
+    name: "GitLab",
+    authUrl: signin("gitlab"),
+  });
+}
+
 services.push({
   id: "email",
   name: "Email",
@@ -63,6 +71,9 @@ function filterServices(team) {
     output = reject(output, (service) => service.id === "discord");
   }
   if (team && !team.githubId) {
+    output = reject(output, (service) => service.id === "github");
+  }
+  if (team && !team.gitlabId) {
     output = reject(output, (service) => service.id === "github");
   }
   if (!team || !team.guestSignin) {
