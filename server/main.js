@@ -188,7 +188,7 @@ server.on("error", (err) => {
 
 server.on("listening", () => {
   const address = server.address();
-  console.log(`\n> Listening on http://localhost:${address.port}\n`);
+  console.log(`\n> Listening on http://${address}:${address.port}\n`);
 });
 
 server.listen(process.env.PORT || "3000");
