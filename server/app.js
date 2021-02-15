@@ -33,6 +33,12 @@ const scriptSrc = [
   "gist.github.com",
 ];
 
+const corsOptions = {
+  origin: '*',
+  allowHeaders: 'Accept',
+  keepHeadersOnError: true,
+}
+
 if (env.GOOGLE_ANALYTICS_ID) {
   scriptSrc.push("www.google-analytics.com");
 }
@@ -41,7 +47,7 @@ if (env.CDN_URL) {
   defaultSrc.push(env.CDN_URL);
 }
 
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(compress());
 
 if (isProduction) {
