@@ -72,6 +72,7 @@
     "@sentry/tracing": "^6.0.1",
     "@tippy.js/react": "^2.2.2",
     "@tommoor/remove-markdown": "0.3.1",
+    "@koa/cors": "3.1.0",
     "autotrack": "^2.4.1",
     "aws-sdk": "^2.831.0",
     "babel-plugin-lodash": "^3.3.4",

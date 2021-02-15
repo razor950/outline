@@ -1,6 +1,7 @@
 // @flow
 import * as Sentry from "@sentry/node";
 import Koa from "koa";
+import cors from "@koa/cors";
 import compress from "koa-compress";
 import helmet, {
   contentSecurityPolicy,
@@ -40,6 +41,7 @@ if (env.CDN_URL) {
   defaultSrc.push(env.CDN_URL);
 }
 
+app.use(cors());
 app.use(compress());
 
 if (isProduction) {
