@@ -48,7 +48,6 @@ passport.use(
 
       if (isFirstUser) {
         await team.provisionFirstCollection(user.id);
-        //await team.provisionSubdomain(guild.login);
       }
 
       done(null, user);
