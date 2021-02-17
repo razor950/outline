@@ -9,6 +9,7 @@ if (process.env.DD_API_KEY) {
     // SOURCE_VERSION is used by Heroku
     version: process.env.SOURCE_COMMIT || process.env.SOURCE_VERSION,
   });
+}
 
 if (
   !process.env.SECRET_KEY ||
