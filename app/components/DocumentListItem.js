@@ -164,6 +164,7 @@ const DocumentLink = styled(Link)`
   border-radius: 8px;
   max-height: 50vh;
   width: calc(100vw - 8px);
+
   ${breakpoint("tablet")`
     width: auto;
   `};

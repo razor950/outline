@@ -6,7 +6,6 @@ import { PlusIcon } from "outline-icons";
 import * as React from "react";
 import { withTranslation, type TFunction, Trans } from "react-i18next";
 import { type Match } from "react-router-dom";
-
 import AuthStore from "stores/AuthStore";
 import PoliciesStore from "stores/PoliciesStore";
 import UsersStore from "stores/UsersStore";
@@ -82,23 +81,25 @@ class People extends React.Component<Props> {
         <PageTitle title={t("People")} />
         <h1>{t("People")}</h1>
         <HelpText>
-        <Trans>
+          <Trans>
             Everyone that has signed into Outline appears here. It’s possible
             that there are other users who have access through{" "}
             {team.signinMethods} but haven’t signed in yet.
           </Trans>
         </HelpText>
-        <Button
-          type="button"
-          data-on="click"
-          data-event-category="invite"
-          data-event-action="peoplePage"
-          onClick={this.handleInviteModalOpen}
-          icon={<PlusIcon />}
-          neutral
-        >
-          {t("Invite people")}…
-        </Button>
+        {can.invite && (
+          <Button
+            type="button"
+            data-on="click"
+            data-event-category="invite"
+            data-event-action="peoplePage"
+            onClick={this.handleInviteModalOpen}
+            icon={<PlusIcon />}
+            neutral
+          >
+            {t("Invite people")}…
+          </Button>
+        )}
 
         <Tabs>
           <Tab to="/settings/people" exact>
@@ -115,7 +116,6 @@ class People extends React.Component<Props> {
           <Tab to="/settings/people/all" exact>
             {t("Everyone")} <Bubble count={counts.all - counts.invited} />
           </Tab>
-
           {can.invite && (
             <>
               <Separator />
@@ -137,14 +137,15 @@ class People extends React.Component<Props> {
             />
           )}
         />
-
-        <Modal
-          title={t("Invite people")}
-          onRequestClose={this.handleInviteModalClose}
-          isOpen={this.inviteModalOpen}
-        >
-          <Invite onSubmit={this.handleInviteModalClose} />
-        </Modal>
+        {can.invite && (
+          <Modal
+            title={t("Invite people")}
+            onRequestClose={this.handleInviteModalClose}
+            isOpen={this.inviteModalOpen}
+          >
+            <Invite onSubmit={this.handleInviteModalClose} />
+          </Modal>
+        )}
       </CenteredContent>
     );
   }

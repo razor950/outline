@@ -1,4 +1,7 @@
 // @flow
+
+// Note: This entire object is stringified in the HTML exposed to the client
+// do not add anything here that should be a secret or password
 export default {
   URL: process.env.URL,
   CDN_URL: process.env.CDN_URL || "",

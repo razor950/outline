@@ -107,7 +107,7 @@ class CollectionNew extends React.Component<Props> {
     return (
       <form onSubmit={this.handleSubmit}>
         <HelpText>
-        <Trans>
+          <Trans>
             Collections are for grouping your documents. They work best when
             organized around a topic or internal team — Product or Engineering
             for example.

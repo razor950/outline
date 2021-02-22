@@ -91,7 +91,7 @@ const HiddenInput = styled.input`
     opacity: 0.75;
     cursor: default;
   }
-  
+
   &:checked + ${Slider} {
     background-color: ${(props) => props.theme.primary};
   }

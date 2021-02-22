@@ -55,7 +55,7 @@ function UserProfile(props: Props) {
             time: distanceInWordsToNow(new Date(user.createdAt)),
           })}
           {user.isAdmin && (
-              <StyledBadge primary={user.isAdmin}>{t("Admin")}</StyledBadge>
+            <StyledBadge primary={user.isAdmin}>{t("Admin")}</StyledBadge>
           )}
           {user.isSuspended && <StyledBadge>{t("Suspended")}</StyledBadge>}
           {isCurrentUser && (
