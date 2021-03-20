@@ -50,19 +50,19 @@ if (GITHUB_CLIENT_ID) {
             team: {
               name: profile.team.name,
               subdomain: profile.team.domain,
-              avatarUrl: profile.team.image_230,
+              avatarUrl: profile.team.avatar_url,
             },
             user: {
-              name: profile.user.name,
-              email: profile.user.email,
-              avatarUrl: profile.user.image_192,
+              name: profile.name,
+              email: profile.email,
+              avatarUrl: profile.avatar_url,
             },
             authenticationProvider: {
               name: providerName,
               providerId: profile.team.id,
             },
             authentication: {
-              providerId: profile.user.id,
+              providerId: profile.id,
               accessToken,
               refreshToken,
               scopes,
@@ -87,7 +87,10 @@ if (GITHUB_CLIENT_ID) {
     router.get(
         "github.callback",
         auth({ required: false }),
-        passportMiddleware(providerName)
+        passport.authenticate('github', { failureRedirect: '/' }),
+        function(req, res) {
+          console.log(req); // <- This ideally should have the access_token? but doesn't
+        }
     );
 
     router.get("github.commands", auth({ required: false }), async (ctx) => {
