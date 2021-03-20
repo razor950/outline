@@ -14,12 +14,19 @@ import {
   Event,
   Team,
 } from "../models";
+import * as Github from "../github";
 import { StateStore } from "../utils/passport";
 
 const router = new Router();
 const providerName = "github";
 const GITHUB_CLIENT_ID = process.env.GITHUB_KEY;
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_SECRET;
+
+const scopes = [
+  "repo",
+  "read:org",
+  "user",
+];
 
 export const config = {
     name: "Github",
