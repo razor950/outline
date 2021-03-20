@@ -54,7 +54,7 @@ if (GITHUB_CLIENT_ID) {
             },
             user: {
               name: profile.username,
-              email: profile.emails,
+              email: profile.emails.value,
               avatarUrl: profile._json.avatar_url,
             },
             authenticationProvider: {
