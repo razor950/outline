@@ -80,7 +80,7 @@ if (GITHUB_CLIENT_ID) {
     strategy.name = providerName;
     passport.use(strategy);
 
-    router.get("github", passport.authenticate(providerName));
+    router.get("github", passport.authenticate(providerName, { scope: [ 'user:email' ] }));
 
     // start the oauth process and redirect user to Github
     // signin callback from Github
