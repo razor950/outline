@@ -10,6 +10,7 @@ import {
 } from "../../shared/utils/domains";
 import { ValidationError } from "../errors";
 import { DataTypes, sequelize, Op } from "../sequelize";
+import { generateAvatarUrl } from "../utils/avatars";
 import { publicS3Endpoint, uploadToS3FromUrl } from "../utils/s3";
 
 import Collection from "./Collection";
@@ -54,9 +55,6 @@ const Team = sequelize.define(
     },
     slackId: { type: DataTypes.STRING, allowNull: true },
     googleId: { type: DataTypes.STRING, allowNull: true },
-    gitlabId: { type: DataTypes.STRING, allowNull: true },
-    githubId: { type: DataTypes.STRING, allowNull: true },
-    discordId: { type: DataTypes.STRING, allowNull: true },
     avatarUrl: { type: DataTypes.STRING, allowNull: true },
     sharing: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     guestSignin: {
@@ -69,7 +67,6 @@ const Team = sequelize.define(
       allowNull: false,
       defaultValue: true,
     },
-    slackData: DataTypes.JSONB,
   },
   {
     paranoid: true,
@@ -88,7 +85,11 @@ const Team = sequelize.define(
       },
       logoUrl() {
         return (
-          this.avatarUrl || (this.slackData ? this.slackData.image_88 : null)
+          this.avatarUrl ||
+          generateAvatarUrl({
+            id: this.id,
+            name: this.name,
+          })
         );
       },
     },
@@ -99,6 +100,14 @@ Team.associate = (models) => {
   Team.hasMany(models.Collection, { as: "collections" });
   Team.hasMany(models.Document, { as: "documents" });
   Team.hasMany(models.User, { as: "users" });
+  Team.hasMany(models.AuthenticationProvider, {
+    as: "authenticationProviders",
+  });
+  Team.addScope("withAuthenticationProviders", {
+    include: [
+      { model: models.AuthenticationProvider, as: "authenticationProviders" },
+    ],
+  });
 };
 
 const uploadAvatar = async (model) => {
@@ -124,17 +133,21 @@ const uploadAvatar = async (model) => {
   }
 };
 
-Team.prototype.provisionSubdomain = async function (subdomain) {
+Team.prototype.provisionSubdomain = async function (
+  requestedSubdomain: string,
+  options = {}
+) {
   if (this.subdomain) return this.subdomain;
 
+  let subdomain = requestedSubdomain;
   let append = 0;
   while (true) {
     try {
-      await this.update({ subdomain });
+      await this.update({ subdomain }, options);
       break;
     } catch (err) {
       // subdomain was invalid or already used, try again
-      subdomain = `${subdomain}${++append}`;
+      subdomain = `${requestedSubdomain}${++append}`;
     }
   }
 
@@ -159,17 +172,10 @@ Team.prototype.provisionFirstCollection = async function (userId) {
     "Our Editor",
     "What is Outline",
   ];
+
   for (const title of onboardingDocs) {
     const text = await readFile(
-      path.join(
-        __dirname,
-        "..",
-        "..",
-        "..",
-        "server",
-        "onboarding",
-        `${title}.md`
-      ),
+      path.join(process.cwd(), "server", "onboarding", `${title}.md`),
       "utf8"
     );
     const document = await Document.create({

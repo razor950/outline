@@ -1,7 +1,6 @@
 // @flow
 import * as Sentry from "@sentry/node";
 import Koa from "koa";
-import cors from "@koa/cors";
 import compress from "koa-compress";
 import helmet, {
   contentSecurityPolicy,
@@ -11,7 +10,6 @@ import helmet, {
 import logger from "koa-logger";
 import mount from "koa-mount";
 import onerror from "koa-onerror";
-import passport from 'koa-passport';
 import enforceHttps from "koa-sslify";
 import api from "./api";
 import auth from "./auth";
@@ -33,12 +31,6 @@ const scriptSrc = [
   "gist.github.com",
 ];
 
-const corsOptions = {
-  origin: '*',
-  allowHeaders: 'Accept',
-  keepHeadersOnError: true,
-}
-
 if (env.GOOGLE_ANALYTICS_ID) {
   scriptSrc.push("www.google-analytics.com");
 }
@@ -47,7 +39,6 @@ if (env.CDN_URL) {
   defaultSrc.push(env.CDN_URL);
 }
 
-app.use(cors(corsOptions));
 app.use(compress());
 
 if (isProduction) {
@@ -173,8 +164,6 @@ app.on("error", (error, ctx) => {
     console.error(error);
   }
 });
-
-app.use(passport.initialize());
 
 app.use(mount("/auth", auth));
 app.use(mount("/api", api));

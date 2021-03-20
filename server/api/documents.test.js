@@ -1325,6 +1325,7 @@ describe("#documents.move", () => {
     const body = await res.json();
     expect(res.status).toEqual(200);
     expect(body.data.documents[0].collectionId).toEqual(collection.id);
+    expect(body.policies[0].abilities.move).toEqual(true);
   });
 
   it("should not allow moving the document to a collection the user cannot access", async () => {
@@ -1439,6 +1440,28 @@ describe("#documents.restore", () => {
 
     expect(res.status).toEqual(200);
     expect(body.data.archivedAt).toEqual(null);
+  });
+
+  it("should not add restored templates to collection structure", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({ teamId: user.teamId });
+    const template = await buildDocument({
+      teamId: user.teamId,
+      collectionId: collection.id,
+      template: true,
+    });
+    await template.archive(user.id);
+
+    const res = await server.post("/api/documents.restore", {
+      body: { token: user.getJwtToken(), id: template.id },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.archivedAt).toEqual(null);
+
+    await collection.reload();
+    expect(collection.documentStructure).toEqual(null);
   });
 
   it("should restore archived when previous parent is archived", async () => {
@@ -1746,6 +1769,37 @@ describe("#documents.update", () => {
     expect(res.status).toEqual(200);
     expect(body.data.title).toBe("Updated title");
     expect(body.data.text).toBe("Updated text");
+  });
+
+  it("should not add template to collection structure when publishing", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({ teamId: user.teamId });
+    const template = await buildDocument({
+      teamId: user.teamId,
+      collectionId: collection.id,
+      template: true,
+      publishedAt: null,
+    });
+
+    const res = await server.post("/api/documents.update", {
+      body: {
+        token: user.getJwtToken(),
+        id: template.id,
+        title: "Updated title",
+        text: "Updated text",
+        lastRevision: template.revision,
+        publish: true,
+      },
+    });
+    const body = await res.json();
+
+    expect(res.status).toEqual(200);
+    expect(body.data.title).toBe("Updated title");
+    expect(body.data.text).toBe("Updated text");
+    expect(body.data.publishedAt).toBeTruthy();
+
+    await collection.reload();
+    expect(collection.documentStructure).toBe(null);
   });
 
   it("should allow publishing document in private collection", async () => {

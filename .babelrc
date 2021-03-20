@@ -24,15 +24,6 @@
     ],
     "@babel/plugin-transform-destructuring",
     "@babel/plugin-transform-regenerator",
-    "transform-class-properties",
-    [
-      "transform-inline-environment-variables",
-      {
-        "include": [
-          "SOURCE_COMMIT",
-          "SOURCE_VERSION"
-        ]
-      }
-    ]
+    "transform-class-properties"
   ]
 }
