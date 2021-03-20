@@ -49,13 +49,12 @@ if (GITHUB_CLIENT_ID) {
           const result = await accountProvisioner({
             ip: req.ip,
             team: {
-              name: profile.team.displayName,
-              subdomain: profile.team.domain,
-              avatarUrl: profile.team.avatar_url,
+              name: profile.displayName,
+              avatarUrl: profile._json.avatar_url,
             },
             user: {
               name: profile.displayName,
-              email: profile._json.email,
+              email: profile.emails,
               avatarUrl: profile._json.avatar_url,
             },
             authenticationProvider: {
