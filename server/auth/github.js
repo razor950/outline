@@ -45,17 +45,18 @@ if (GITHUB_CLIENT_ID) {
       },
       async function (req, accessToken, refreshToken, profile, done) {
         try {
+          console.log(profile);
           const result = await accountProvisioner({
             ip: req.ip,
             team: {
-              name: profile.team.name,
+              name: profile.team.displayName,
               subdomain: profile.team.domain,
               avatarUrl: profile.team.avatar_url,
             },
             user: {
-              name: profile.name,
-              email: profile.email,
-              avatarUrl: profile.avatar_url,
+              name: profile.displayName,
+              email: profile._json.email,
+              avatarUrl: profile._json.avatar_url,
             },
             authenticationProvider: {
               name: providerName,
