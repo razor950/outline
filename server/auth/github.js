@@ -45,11 +45,6 @@ if (GITHUB_CLIENT_ID) {
       },
       async function (req, accessToken, refreshToken, profile, done) {
         try {
-          console.log(profile);
-          console.log("first:");
-          console.log(profile.emails[0]);
-          console.log("second:");
-          console.log(profile.emails[0].value);
           const result = await accountProvisioner({
             ip: req.ip,
             team: {
@@ -84,7 +79,7 @@ if (GITHUB_CLIENT_ID) {
     strategy.name = providerName;
     passport.use(strategy);
 
-    router.get("github", passport.authenticate(providerName, { scope: [ 'user:email' ] }));
+    router.get("github", passport.authenticate(providerName, { scope: scopes }));
 
     // start the oauth process and redirect user to Github
     // signin callback from Github
