@@ -46,6 +46,10 @@ if (GITHUB_CLIENT_ID) {
       async function (req, accessToken, refreshToken, profile, done) {
         try {
           console.log(profile);
+          console.log("first:");
+          console.log(profile.emails[0]);
+          console.log("second:");
+          console.log(profile.emails[0].value);
           const result = await accountProvisioner({
             ip: req.ip,
             team: {
@@ -205,7 +209,17 @@ if (GITHUB_CLIENT_ID) {
         });
 
         ctx.redirect("/settings/integrations/github");
+  });
+
+  passport.serializeUser(function(ctx.state.user, done) {
+    done(null, ctx.state.user.id);
+  });
+  
+  passport.deserializeUser(function(id, done) {
+    User.findById(id, function(err, ctx.state.user) {
+      done(err, ctx.state.user);
     });
+  });
 }
 
 export default router;
