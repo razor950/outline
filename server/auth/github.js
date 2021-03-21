@@ -210,16 +210,6 @@ if (GITHUB_CLIENT_ID) {
 
         ctx.redirect("/settings/integrations/github");
   });
-
-  passport.serializeUser(function(ctx.state.user, done) {
-    done(null, ctx.state.user.id);
-  });
-  
-  passport.deserializeUser(function(id, done) {
-    User.findById(id, function(err, ctx.state.user) {
-      done(err, ctx.state.user);
-    });
-  });
 }
 
 export default router;
