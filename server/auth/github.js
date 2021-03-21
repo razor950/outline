@@ -79,14 +79,14 @@ if (GITHUB_CLIENT_ID) {
     strategy.name = providerName;
     passport.use(strategy);
 
-    router.get("github", passport.authenticate(providerName, { scope: scopes }));
+    router.get("github", passport.authenticate(providerName, { scope: scopes, session: false }));
 
     // start the oauth process and redirect user to Github
     // signin callback from Github
     router.get(
         "github.callback",
         auth({ required: false }),
-        passport.authenticate('github', { failureRedirect: '/' }),
+        passport.authenticate('github', { failureRedirect: '/', session: false }),
         function(req, res) {
           console.log(req); // <- This ideally should have the access_token? but doesn't
         }
