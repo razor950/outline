@@ -86,10 +86,7 @@ if (GITHUB_CLIENT_ID) {
     router.get(
         "github.callback",
         auth({ required: false }),
-        passport.authenticate('github', { failureRedirect: '/', session: false }),
-        function(req, res) {
-          console.log(req); // <- This ideally should have the access_token? but doesn't
-        }
+        passportMiddleware(providerName)
     );
 
     router.get("github.commands", auth({ required: false }), async (ctx) => {
