@@ -7,6 +7,7 @@ import { render } from "react-dom";
 import { Router } from "react-router-dom";
 import { initI18n } from "shared/i18n";
 import stores from "stores";
+import Analytics from "components/Analytics";
 import ErrorBoundary from "components/ErrorBoundary";
 import PageTheme from "components/PageTheme";
 import ScrollToTop from "components/ScrollToTop";
@@ -27,38 +28,49 @@ if (env.SENTRY_DSN) {
 
 if ("serviceWorker" in window.navigator) {
   window.addEventListener("load", () => {
-    window.navigator.serviceWorker
-      .register("/static/service-worker.js", {
+    // see: https://bugs.chromium.org/p/chromium/issues/detail?id=1097616
+    // In some rare (<0.1% of cases) this call can return `undefined`
+    const maybePromise = window.navigator.serviceWorker.register(
+      "/static/service-worker.js",
+      {
         scope: "/",
-      })
-      .then((registration) => {
-        console.log("SW registered: ", registration);
-      })
-      .catch((registrationError) => {
-        console.log("SW registration failed: ", registrationError);
-      });
+      }
+    );
+
+    if (maybePromise && maybePromise.then) {
+      maybePromise
+        .then((registration) => {
+          console.log("SW registered: ", registration);
+        })
+        .catch((registrationError) => {
+          console.log("SW registration failed: ", registrationError);
+        });
+    }
   });
 }
 
 if (element) {
-  render(
+  const App = () => (
     <Provider {...stores}>
-      <Theme>
-        <ErrorBoundary>
-          <Router history={history}>
-            <>
-              <PageTheme />
-              <ScrollToTop>
-                <Routes />
-              </ScrollToTop>
-              <Toasts />
-            </>
-          </Router>
-        </ErrorBoundary>
-      </Theme>
-    </Provider>,
-    element
+      <Analytics>
+        <Theme>
+          <ErrorBoundary>
+            <Router history={history}>
+              <>
+                <PageTheme />
+                <ScrollToTop>
+                  <Routes />
+                </ScrollToTop>
+                <Toasts />
+              </>
+            </Router>
+          </ErrorBoundary>
+        </Theme>
+      </Analytics>
+    </Provider>
   );
+
+  render(<App />, element);
 }
 
 window.addEventListener("load", async () => {

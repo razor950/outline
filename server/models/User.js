@@ -3,14 +3,19 @@ import crypto from "crypto";
 import addMinutes from "date-fns/add_minutes";
 import subMinutes from "date-fns/sub_minutes";
 import JWT from "jsonwebtoken";
-import uuid from "uuid";
+import { v4 as uuidv4 } from "uuid";
 import { languages } from "../../shared/i18n";
 import { ValidationError } from "../errors";
-import { sendEmail } from "../mailer";
-import { DataTypes, sequelize, encryptedFields } from "../sequelize";
+import { DataTypes, sequelize, encryptedFields, Op } from "../sequelize";
 import { DEFAULT_AVATAR_HOST } from "../utils/avatars";
 import { publicS3Endpoint, uploadToS3FromUrl } from "../utils/s3";
-import { Star, Team, Collection, NotificationSetting, ApiKey } from ".";
+import {
+  UserAuthentication,
+  Star,
+  Collection,
+  NotificationSetting,
+  ApiKey,
+} from ".";
 
 const User = sequelize.define(
   "user",
@@ -25,6 +30,11 @@ const User = sequelize.define(
     name: DataTypes.STRING,
     avatarUrl: { type: DataTypes.STRING, allowNull: true },
     isAdmin: DataTypes.BOOLEAN,
+    isViewer: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false,
+    },
     service: { type: DataTypes.STRING, allowNull: true },
     serviceId: { type: DataTypes.STRING, allowNull: true, unique: true },
     jwtSecret: encryptedFields().vault("jwtSecret"),
@@ -91,7 +101,7 @@ User.prototype.collectionIds = async function (options = {}) {
   const collectionStubs = await Collection.scope({
     method: ["withMembership", this.id],
   }).findAll({
-    attributes: ["id", "private"],
+    attributes: ["id", "permission"],
     where: { teamId: this.teamId },
     paranoid: true,
     ...options,
@@ -100,7 +110,8 @@ User.prototype.collectionIds = async function (options = {}) {
   return collectionStubs
     .filter(
       (c) =>
-        !c.private ||
+        c.permission === "read" ||
+        c.permission === "read_write" ||
         c.memberships.length > 0 ||
         c.collectionGroupMemberships.length > 0
     )
@@ -174,7 +185,7 @@ const uploadAvatar = async (model) => {
     try {
       const newUrl = await uploadToS3FromUrl(
         avatarUrl,
-        `avatars/${model.id}/${uuid.v4()}`,
+        `avatars/${model.id}/${uuidv4()}`,
         "public-read"
       );
       if (newUrl) model.avatarUrl = newUrl;
@@ -202,6 +213,10 @@ const removeIdentifyingInfo = async (model, options) => {
     where: { userId: model.id },
     transaction: options.transaction,
   });
+  await UserAuthentication.destroy({
+    where: { userId: model.id },
+    transaction: options.transaction,
+  });
 
   model.email = null;
   model.name = "Unknown";
@@ -216,35 +231,9 @@ const removeIdentifyingInfo = async (model, options) => {
   await model.save({ hooks: false, transaction: options.transaction });
 };
 
-const checkLastAdmin = async (model) => {
-  const teamId = model.teamId;
-
-  if (model.isAdmin) {
-    const userCount = await User.count({ where: { teamId } });
-    const adminCount = await User.count({ where: { isAdmin: true, teamId } });
-
-    if (userCount > 1 && adminCount <= 1) {
-      throw new ValidationError(
-        "Cannot delete account as only admin. Please transfer admin permissions to another user and try again."
-      );
-    }
-  }
-};
-
-User.beforeDestroy(checkLastAdmin);
 User.beforeDestroy(removeIdentifyingInfo);
 User.beforeSave(uploadAvatar);
 User.beforeCreate(setRandomJwtSecret);
-User.afterCreate(async (user) => {
-  const team = await Team.findByPk(user.teamId);
-
-  // From Slack support:
-  // If you wish to contact users at an email address obtained through Slack,
-  // you need them to opt-in through a clear and separate process.
-  if (user.service && user.service !== "slack") {
-    sendEmail("welcome", user.email, { teamUrl: team.url });
-  }
-});
 
 // By default when a user signs up we subscribe them to email notifications
 // when documents they created are edited by other team members and onboarding
@@ -266,6 +255,14 @@ User.afterCreate(async (user, options) => {
       },
       transaction: options.transaction,
     }),
+    NotificationSetting.findOrCreate({
+      where: {
+        userId: user.id,
+        teamId: user.teamId,
+        event: "emails.features",
+      },
+      transaction: options.transaction,
+    }),
   ]);
 });
 
@@ -274,6 +271,7 @@ User.getCounts = async function (teamId: string) {
     SELECT 
       COUNT(CASE WHEN "suspendedAt" IS NOT NULL THEN 1 END) as "suspendedCount",
       COUNT(CASE WHEN "isAdmin" = true THEN 1 END) as "adminCount",
+      COUNT(CASE WHEN "isViewer" = true THEN 1 END) as "viewerCount",
       COUNT(CASE WHEN "lastActiveAt" IS NULL THEN 1 END) as "invitedCount",
       COUNT(CASE WHEN "suspendedAt" IS NULL AND "lastActiveAt" IS NOT NULL THEN 1 END) as "activeCount",
       COUNT(*) as count
@@ -292,10 +290,48 @@ User.getCounts = async function (teamId: string) {
   return {
     active: parseInt(counts.activeCount),
     admins: parseInt(counts.adminCount),
+    viewers: parseInt(counts.viewerCount),
     all: parseInt(counts.count),
     invited: parseInt(counts.invitedCount),
     suspended: parseInt(counts.suspendedCount),
   };
+};
+
+User.prototype.demote = async function (
+  teamId: string,
+  to: "Member" | "Viewer"
+) {
+  const res = await User.findAndCountAll({
+    where: {
+      teamId,
+      isAdmin: true,
+      id: {
+        [Op.ne]: this.id,
+      },
+    },
+    limit: 1,
+  });
+
+  if (res.count >= 1) {
+    if (to === "Member") {
+      return this.update({ isAdmin: false, isViewer: false });
+    } else if (to === "Viewer") {
+      return this.update({ isAdmin: false, isViewer: true });
+    }
+  } else {
+    throw new ValidationError("At least one admin is required");
+  }
+};
+
+User.prototype.promote = async function () {
+  return this.update({ isAdmin: true, isViewer: false });
+};
+
+User.prototype.activate = async function () {
+  return this.update({
+    suspendedById: null,
+    suspendedAt: null,
+  });
 };
 
 export default User;

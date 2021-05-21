@@ -3,19 +3,17 @@ import fs from "fs";
 import path from "path";
 import { URL } from "url";
 import util from "util";
-import uuid from "uuid";
+import { v4 as uuidv4 } from "uuid";
 import {
   stripSubdomain,
   RESERVED_SUBDOMAINS,
 } from "../../shared/utils/domains";
-import { ValidationError } from "../errors";
 import { DataTypes, sequelize, Op } from "../sequelize";
 import { generateAvatarUrl } from "../utils/avatars";
 import { publicS3Endpoint, uploadToS3FromUrl } from "../utils/s3";
 
 import Collection from "./Collection";
 import Document from "./Document";
-import User from "./User";
 
 const readFile = util.promisify(fs.readFile);
 
@@ -57,6 +55,10 @@ const Team = sequelize.define(
     googleId: { type: DataTypes.STRING, allowNull: true },
     avatarUrl: { type: DataTypes.STRING, allowNull: true },
     sharing: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    signupQueryParams: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
     guestSignin: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
@@ -122,7 +124,7 @@ const uploadAvatar = async (model) => {
     try {
       const newUrl = await uploadToS3FromUrl(
         avatarUrl,
-        `avatars/${model.id}/${uuid.v4()}`,
+        `avatars/${model.id}/${uuidv4()}`,
         "public-read"
       );
       if (newUrl) model.avatarUrl = newUrl;
@@ -162,6 +164,7 @@ Team.prototype.provisionFirstCollection = async function (userId) {
     teamId: this.id,
     createdById: userId,
     sort: Collection.DEFAULT_SORT,
+    permission: "read_write",
   });
 
   // For the first collection we go ahead and create some intitial documents to get
@@ -194,41 +197,18 @@ Team.prototype.provisionFirstCollection = async function (userId) {
   }
 };
 
-Team.prototype.addAdmin = async function (user: User) {
-  return user.update({ isAdmin: true });
-};
-
-Team.prototype.removeAdmin = async function (user: User) {
-  const res = await User.findAndCountAll({
-    where: {
-      teamId: this.id,
-      isAdmin: true,
-      id: {
-        [Op.ne]: user.id,
-      },
-    },
-    limit: 1,
-  });
-  if (res.count >= 1) {
-    return user.update({ isAdmin: false });
-  } else {
-    throw new ValidationError("At least one admin is required");
-  }
-};
-
-Team.prototype.activateUser = async function (user: User, admin: User) {
-  return user.update({
-    suspendedById: null,
-    suspendedAt: null,
-  });
-};
-
 Team.prototype.collectionIds = async function (paranoid: boolean = true) {
   let models = await Collection.findAll({
-    attributes: ["id", "private"],
-    where: { teamId: this.id, private: false },
+    attributes: ["id"],
+    where: {
+      teamId: this.id,
+      permission: {
+        [Op.ne]: null,
+      },
+    },
     paranoid,
   });
+
   return models.map((c) => c.id);
 };
 

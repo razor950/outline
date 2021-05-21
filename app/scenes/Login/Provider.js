@@ -97,29 +97,19 @@ class Provider extends React.Component<Props, State> {
       );
     }
 
-    const icon = <AuthLogo providerName={id} />;
-
     return (
       <Wrapper key={id}>
         <ButtonLarge
           onClick={() => (window.location.href = authUrl)}
-          icon={icon ? <Logo>{icon}</Logo> : null}
+          icon={<AuthLogo providerName={id} />}
           fullwidth
         >
-          {isCreate ? "Sign up" : "Continue"} with {name}
+          Continue with {name}
         </ButtonLarge>
       </Wrapper>
     );
   }
 }
-
-const Logo = styled.div`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-`;
 
 const Wrapper = styled.div`
   margin-bottom: 1em;

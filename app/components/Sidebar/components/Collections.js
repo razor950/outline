@@ -13,24 +13,36 @@ import CollectionsLoading from "./CollectionsLoading";
 import DropCursor from "./DropCursor";
 import Header from "./Header";
 import SidebarLink from "./SidebarLink";
+import useCurrentTeam from "hooks/useCurrentTeam";
 type Props = {
   onCreateCollection: () => void,
 };
 
 function Collections({ onCreateCollection }: Props) {
+  const [isFetching, setFetching] = React.useState(false);
   const { ui, policies, documents, collections } = useStores();
   const isPreloaded: boolean = !!collections.orderedData.length;
   const { t } = useTranslation();
+  const team = useCurrentTeam();
   const orderedCollections = collections.orderedData;
+  const can = policies.abilities(team.id);
   const [isDraggingAnyCollection, setIsDraggingAnyCollection] = React.useState(
     false
   );
 
   React.useEffect(() => {
-    if (!collections.isLoaded) {
-      collections.fetchPage({ limit: 100 });
+    async function load() {
+      if (!collections.isLoaded && !isFetching) {
+        try {
+          setFetching(true);
+          await collections.fetchPage({ limit: 100 });
+        } finally {
+          setFetching(false);
+        }
+      }
     }
-  });
+    load();
+  }, [collections, isFetching]);
 
   const [{ isCollectionDropping }, dropToReorderCollection] = useDrop({
     accept: "collection",
@@ -68,13 +80,15 @@ function Collections({ onCreateCollection }: Props) {
           belowCollection={orderedCollections[index + 1]}
         />
       ))}
-      <SidebarLink
-        to="/collections"
-        onClick={onCreateCollection}
-        icon={<PlusIcon color="currentColor" />}
-        label={`${t("New collection")}…`}
-        exact
-      />
+      {can.createCollection && (
+        <SidebarLink
+          to="/collections"
+          onClick={onCreateCollection}
+          icon={<PlusIcon color="currentColor" />}
+          label={`${t("New collection")}…`}
+          exact
+        />
+      )}
     </>
   );
 

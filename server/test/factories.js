@@ -1,5 +1,5 @@
 // @flow
-import uuid from "uuid";
+import { v4 as uuidv4 } from "uuid";
 import {
   Share,
   Team,
@@ -10,7 +10,7 @@ import {
   Group,
   GroupUser,
   Attachment,
-  Authentication,
+  IntegrationAuthentication,
   Integration,
   AuthenticationProvider,
 } from "../models";
@@ -42,7 +42,7 @@ export function buildTeam(overrides: Object = {}) {
       authenticationProviders: [
         {
           name: "slack",
-          providerId: uuid.v4(),
+          providerId: uuidv4(),
         },
       ],
       ...overrides,
@@ -84,7 +84,7 @@ export async function buildUser(overrides: Object = {}) {
       authentications: [
         {
           authenticationProviderId: authenticationProvider.id,
-          providerId: uuid.v4(),
+          providerId: uuidv4(),
         },
       ],
       ...overrides,
@@ -93,6 +93,10 @@ export async function buildUser(overrides: Object = {}) {
       include: "authentications",
     }
   );
+}
+
+export async function buildAdmin(overrides: Object = {}) {
+  return buildUser({ ...overrides, isAdmin: true });
 }
 
 export async function buildInvite(overrides: Object = {}) {
@@ -119,7 +123,7 @@ export async function buildIntegration(overrides: Object = {}) {
 
   const user = await buildUser({ teamId: overrides.teamId });
 
-  const authentication = await Authentication.create({
+  const authentication = await IntegrationAuthentication.create({
     service: "slack",
     userId: user.id,
     teamId: user.teamId,
@@ -155,6 +159,7 @@ export async function buildCollection(overrides: Object = {}) {
     name: `Test Collection ${count}`,
     description: "Test collection description",
     createdById: overrides.userId,
+    permission: "read_write",
     ...overrides,
   });
 }
@@ -235,11 +240,6 @@ export async function buildAttachment(overrides: Object = {}) {
   if (!overrides.userId) {
     const user = await buildUser({ teamId: overrides.teamId });
     overrides.userId = user.id;
-  }
-
-  if (!overrides.collectionId) {
-    const collection = await buildCollection(overrides);
-    overrides.collectionId = collection.id;
   }
 
   if (!overrides.documentId) {

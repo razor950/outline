@@ -1,11 +1,14 @@
 // @flow
 import invariant from "invariant";
-import { Document, Revision, User } from "../models";
+import { Document, Revision, User, Team } from "../models";
 import policy from "./policy";
 
 const { allow, cannot } = policy;
 
-allow(User, "create", Document);
+allow(User, "createDocument", Team, (user, team) => {
+  if (!team || user.isViewer || user.teamId !== team.id) return false;
+  return true;
+});
 
 allow(User, ["read", "download"], Document, (user, document) => {
   // existence of collection option is not required here to account for share tokens
@@ -99,6 +102,7 @@ allow(User, ["pin", "unpin"], Document, (user, document) => {
 
 allow(User, "delete", Document, (user, document) => {
   // unpublished drafts can always be deleted
+  if (user.isViewer) return false;
   if (
     !document.deletedAt &&
     !document.publishedAt &&
@@ -118,6 +122,7 @@ allow(User, "delete", Document, (user, document) => {
 });
 
 allow(User, "restore", Document, (user, document) => {
+  if (user.isViewer) return false;
   if (!document.deletedAt) return false;
   return user.teamId === document.teamId;
 });

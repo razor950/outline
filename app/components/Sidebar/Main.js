@@ -114,32 +114,36 @@ function MainSidebar() {
                 exact={false}
                 label={t("Starred")}
               />
-              <SidebarLink
-                to="/templates"
-                icon={<ShapesIcon color="currentColor" />}
-                exact={false}
-                label={t("Templates")}
-                active={
-                  documents.active ? documents.active.template : undefined
-                }
-              />
-              <SidebarLink
-                to="/drafts"
-                icon={<EditIcon color="currentColor" />}
-                label={
-                  <Drafts align="center">
-                    {t("Drafts")}
-                    <Bubble count={documents.totalDrafts} />
-                  </Drafts>
-                }
-                active={
-                  documents.active
-                    ? !documents.active.publishedAt &&
-                      !documents.active.isDeleted &&
-                      !documents.active.isTemplate
-                    : undefined
-                }
-              />
+              {can.createDocument && (
+                <SidebarLink
+                  to="/templates"
+                  icon={<ShapesIcon color="currentColor" />}
+                  exact={false}
+                  label={t("Templates")}
+                  active={
+                    documents.active ? documents.active.template : undefined
+                  }
+                />
+              )}
+              {can.createDocument && (
+                <SidebarLink
+                  to="/drafts"
+                  icon={<EditIcon color="currentColor" />}
+                  label={
+                    <Drafts align="center">
+                      {t("Drafts")}
+                      <Bubble count={documents.totalDrafts} />
+                    </Drafts>
+                  }
+                  active={
+                    documents.active
+                      ? !documents.active.publishedAt &&
+                        !documents.active.isDeleted &&
+                        !documents.active.isTemplate
+                      : undefined
+                  }
+                />
+              )}
             </Section>
             <Section auto>
               <Collections
@@ -173,9 +177,9 @@ function MainSidebar() {
                 exact={false}
                 label={t("Settings")}
               />
-              {can.invite && (
+              {can.inviteUser && (
                 <SidebarLink
-                  to="/settings/people"
+                  to="/settings/members"
                   onClick={handleInviteModalOpen}
                   icon={<PlusIcon color="currentColor" />}
                   label={`${t("Invite people")}…`}
@@ -183,7 +187,7 @@ function MainSidebar() {
               )}
             </Section>
           </Scrollable>
-          {can.invite && (
+          {can.inviteUser && (
             <Modal
               title={t("Invite people")}
               onRequestClose={handleInviteModalClose}

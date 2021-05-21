@@ -39,13 +39,13 @@ router.post("collections.create", auth(), async (ctx) => {
     name,
     color,
     description,
+    permission,
     sharing,
     icon,
     sort = Collection.DEFAULT_SORT,
   } = ctx.body;
 
   let { index } = ctx.body;
-  const isPrivate = ctx.body.private;
   ctx.assertPresent(name, "name is required");
 
   if (color) {
@@ -53,7 +53,7 @@ router.post("collections.create", auth(), async (ctx) => {
   }
 
   const user = ctx.state.user;
-  authorize(user, "create", Collection);
+  authorize(user, "createCollection", user.team);
 
   const collections = await Collection.findAll({
     where: { teamId: user.teamId, deletedAt: null },
@@ -67,12 +67,10 @@ router.post("collections.create", auth(), async (ctx) => {
   });
 
   if (index) {
-    const allowedASCII = new RegExp(/^[\x21-\x7E]+$/);
-    if (!allowedASCII.test(index)) {
-      throw new ValidationError(
-        "Index characters must be between x21 to x7E ASCII"
-      );
-    }
+    ctx.assertIndexCharacters(
+      index,
+      "Index characters must be between x21 to x7E ASCII"
+    );
   } else {
     index = fractionalIndex(
       null,
@@ -89,7 +87,7 @@ router.post("collections.create", auth(), async (ctx) => {
     color,
     teamId: user.teamId,
     createdById: user.id,
-    private: isPrivate,
+    permission: permission ? permission : null,
     sharing,
     sort,
     index,
@@ -105,11 +103,9 @@ router.post("collections.create", auth(), async (ctx) => {
   });
 
   // we must reload the collection to get memberships for policy presenter
-  if (isPrivate) {
-    collection = await Collection.scope({
-      method: ["withMembership", user.id],
-    }).findByPk(collection.id);
-  }
+  collection = await Collection.scope({
+    method: ["withMembership", user.id],
+  }).findByPk(collection.id);
 
   ctx.body = {
     data: presentCollection(collection),
@@ -139,7 +135,7 @@ router.post("collections.import", auth(), async (ctx) => {
   ctx.assertUuid(attachmentId, "attachmentId is required");
 
   const user = ctx.state.user;
-  authorize(user, "import", Collection);
+  authorize(user, "importCollection", user.team);
 
   const attachment = await Attachment.findByPk(attachmentId);
   authorize(user, "read", attachment);
@@ -514,8 +510,16 @@ router.post("collections.export_all", auth(), async (ctx) => {
 });
 
 router.post("collections.update", auth(), async (ctx) => {
-  let { id, name, description, icon, color, sort, sharing } = ctx.body;
-  const isPrivate = ctx.body.private;
+  let {
+    id,
+    name,
+    description,
+    icon,
+    permission,
+    color,
+    sort,
+    sharing,
+  } = ctx.body;
 
   if (color) {
     ctx.assertHexColor(color, "Invalid hex value (please use format #FFFFFF)");
@@ -528,9 +532,9 @@ router.post("collections.update", auth(), async (ctx) => {
 
   authorize(user, "update", collection);
 
-  // we're making this collection private right now, ensure that the current
+  // we're making this collection have no default access, ensure that the current
   // user has a read-write membership so that at least they can edit it
-  if (isPrivate && !collection.private) {
+  if (permission !== "read_write" && collection.permission === "read_write") {
     await CollectionUser.findOrCreate({
       where: {
         collectionId: collection.id,
@@ -543,7 +547,7 @@ router.post("collections.update", auth(), async (ctx) => {
     });
   }
 
-  const isPrivacyChanged = isPrivate !== collection.private;
+  const permissionChanged = permission !== collection.permission;
 
   if (name !== undefined) {
     collection.name = name;
@@ -557,8 +561,8 @@ router.post("collections.update", auth(), async (ctx) => {
   if (color !== undefined) {
     collection.color = color;
   }
-  if (isPrivate !== undefined) {
-    collection.private = isPrivate;
+  if (permission !== undefined) {
+    collection.permission = permission ? permission : null;
   }
   if (sharing !== undefined) {
     collection.sharing = sharing;
@@ -580,7 +584,7 @@ router.post("collections.update", auth(), async (ctx) => {
 
   // must reload to update collection membership for correct policy calculation
   // if the privacy level has changed. Otherwise skip this query for speed.
-  if (isPrivacyChanged) {
+  if (permissionChanged) {
     await collection.reload();
   }
 
@@ -658,6 +662,10 @@ router.post("collections.move", auth(), async (ctx) => {
   let index = ctx.body.index;
 
   ctx.assertPresent(index, "index is required");
+  ctx.assertIndexCharacters(
+    index,
+    "Index characters must be between x21 to x7E ASCII"
+  );
   ctx.assertUuid(id, "id must be a uuid");
 
   const user = ctx.state.user;

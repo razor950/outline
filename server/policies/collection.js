@@ -2,14 +2,18 @@
 import invariant from "invariant";
 import { concat, some } from "lodash";
 import { AdminRequiredError } from "../errors";
-import { Collection, User } from "../models";
+import { Collection, User, Team } from "../models";
 import policy from "./policy";
 
 const { allow } = policy;
 
-allow(User, "create", Collection);
+allow(User, "createCollection", Team, (user, team) => {
+  if (!team || user.isViewer || user.teamId !== team.id) return false;
+  return true;
+});
 
-allow(User, "import", Collection, (actor) => {
+allow(User, "importCollection", Team, (actor, team) => {
+  if (!team || actor.teamId !== team.id) return false;
   if (actor.isAdmin) return true;
   throw new AdminRequiredError();
 });
@@ -24,7 +28,7 @@ allow(User, "move", Collection, (user, collection) => {
 allow(User, ["read", "export"], Collection, (user, collection) => {
   if (!collection || user.teamId !== collection.teamId) return false;
 
-  if (collection.private) {
+  if (!collection.permission) {
     invariant(
       collection.memberships,
       "membership should be preloaded, did you forget withMembership scope?"
@@ -44,10 +48,11 @@ allow(User, ["read", "export"], Collection, (user, collection) => {
 });
 
 allow(User, "share", Collection, (user, collection) => {
+  if (user.isViewer) return false;
   if (!collection || user.teamId !== collection.teamId) return false;
   if (!collection.sharing) return false;
 
-  if (collection.private) {
+  if (collection.permission !== "read_write") {
     invariant(
       collection.memberships,
       "membership should be preloaded, did you forget withMembership scope?"
@@ -67,9 +72,10 @@ allow(User, "share", Collection, (user, collection) => {
 });
 
 allow(User, ["publish", "update"], Collection, (user, collection) => {
+  if (user.isViewer) return false;
   if (!collection || user.teamId !== collection.teamId) return false;
 
-  if (collection.private) {
+  if (collection.permission !== "read_write") {
     invariant(
       collection.memberships,
       "membership should be preloaded, did you forget withMembership scope?"
@@ -89,9 +95,10 @@ allow(User, ["publish", "update"], Collection, (user, collection) => {
 });
 
 allow(User, "delete", Collection, (user, collection) => {
+  if (user.isViewer) return false;
   if (!collection || user.teamId !== collection.teamId) return false;
 
-  if (collection.private) {
+  if (collection.permission !== "read_write") {
     invariant(
       collection.memberships,
       "membership should be preloaded, did you forget withMembership scope?"

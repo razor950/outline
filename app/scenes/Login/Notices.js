@@ -1,12 +1,13 @@
 // @flow
 import * as React from "react";
 import NoticeAlert from "components/NoticeAlert";
+import useQuery from "hooks/useQuery";
 
-type Props = {
-  notice?: string,
-};
+export default function Notices() {
+  const query = useQuery();
+  const notice = query.get("notice");
+  const description = query.get("description");
 
-export default function Notices({ notice }: Props) {
   return (
     <>
       {notice === "google-hd" && (
@@ -27,6 +28,17 @@ export default function Notices({ notice }: Props) {
           an allowed team domain.
         </NoticeAlert>
       )}
+      {notice === "github-org-api" && (
+        <NoticeAlert>
+          Gitea API failed to respond / Invalid Response
+        </NoticeAlert>
+      )}
+      {notice === "no-github-org" && (
+        <NoticeAlert>
+          User must be a part of at least one Organisation. Website must be set
+          for that Organisation.
+        </NoticeAlert>
+      )}
       {notice === "email-auth-required" && (
         <NoticeAlert>
           Your account uses email sign-in, please sign-in with email to
@@ -39,12 +51,15 @@ export default function Notices({ notice }: Props) {
           try again in a few minutes.
         </NoticeAlert>
       )}
-      {notice === "auth-error" && (
-        <NoticeAlert>
-          Authentication failed – we were unable to sign you in at this time.
-          Please try again.
-        </NoticeAlert>
-      )}
+      {notice === "auth-error" &&
+        (description ? (
+          <NoticeAlert>{description}</NoticeAlert>
+        ) : (
+          <NoticeAlert>
+            Authentication failed – we were unable to sign you in at this time.
+            Please try again.
+          </NoticeAlert>
+        ))}
       {notice === "expired-token" && (
         <NoticeAlert>
           Sorry, it looks like that sign-in link is no longer valid, please try

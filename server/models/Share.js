@@ -12,6 +12,7 @@ const Share = sequelize.define(
     published: DataTypes.BOOLEAN,
     revokedAt: DataTypes.DATE,
     revokedById: DataTypes.UUID,
+    lastAccessedAt: DataTypes.DATE,
   },
   {
     getterMethods: {
@@ -37,7 +38,7 @@ Share.associate = (models) => {
   });
   Share.addScope("defaultScope", {
     include: [
-      { association: "user" },
+      { association: "user", paranoid: false },
       { association: "document" },
       { association: "team" },
     ],

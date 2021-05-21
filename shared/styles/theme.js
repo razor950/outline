@@ -91,8 +91,11 @@ export const base = {
   blockToolbarTriggerIcon: colors.white,
   blockToolbarItem: colors.almostBlack,
   blockToolbarText: colors.almostBlack,
+  blockToolbarTextSelected: colors.black,
   blockToolbarHoverBackground: colors.slateLight,
   blockToolbarDivider: colors.slateLight,
+  blockToolbarIcon: undefined,
+  blockToolbarIconSelected: colors.black,
 
   noticeTipBackground: colors.brand.purple,
   noticeTipText: colors.white,
@@ -107,7 +110,10 @@ export const base = {
   },
 
   depths: {
-    sidebar: 1000,
+    header: 800,
+    sidebar: 900,
+    hoverPreview: 998,
+    // Note: editor lightbox is z-index 999
     modalOverlay: 2000,
     modal: 3000,
     menu: 4000,
@@ -133,11 +139,12 @@ export const light = {
   sidebarBackground: colors.warmGrey,
   sidebarItemBackground: colors.black10,
   sidebarText: "rgb(78, 92, 110)",
+  backdrop: "rgba(0, 0, 0, 0.2)",
   shadow: "rgba(0, 0, 0, 0.2)",
 
   menuBackground: colors.white,
   menuShadow:
-    "0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.08)",
+    "0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 8px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.08), 0 30px 40px rgb(0 0 0 / 8%)",
   divider: colors.slateLight,
   titleBarDivider: colors.slateLight,
   inputBorder: colors.slateLight,
@@ -192,13 +199,14 @@ export const dark = {
   sidebarBackground: colors.veryDarkBlue,
   sidebarItemBackground: colors.transparent,
   sidebarText: colors.slate,
+  backdrop: "rgba(255, 255, 255, 0.3)",
   shadow: "rgba(0, 0, 0, 0.6)",
 
   menuBorder: lighten(0.1, colors.almostBlack),
   menuBackground: lighten(0.015, colors.almostBlack),
   menuShadow:
     "0 0 0 1px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(0, 0, 0, 0.08), inset 0 0 1px rgba(255,255,255,.2)",
-  divider: darken(0.2, colors.slate),
+  divider: lighten(0.1, colors.almostBlack),
   titleBarDivider: darken(0.4, colors.slate),
   inputBorder: colors.slateDark,
   inputBorderFocused: colors.slate,
@@ -229,13 +237,21 @@ export const dark = {
   codeBorder: colors.black50,
   codeString: "#3d8fd1",
   embedBorder: colors.black50,
-  horizontalRule: darken(0.2, colors.slate),
+  horizontalRule: lighten(0.1, colors.almostBlack),
 
   noticeInfoBackground: colors.white10,
   noticeInfoText: colors.almostWhite,
 
   scrollbarBackground: colors.black,
   scrollbarThumb: colors.lightBlack,
+};
+
+export const lightMobile = {
+  background: colors.white,
+};
+
+export const darkMobile = {
+  background: colors.black,
 };
 
 export default light;

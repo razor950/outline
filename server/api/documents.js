@@ -5,6 +5,7 @@ import { subtractDate } from "../../shared/utils/date";
 import documentCreator from "../commands/documentCreator";
 import documentImporter from "../commands/documentImporter";
 import documentMover from "../commands/documentMover";
+import env from "../env";
 import {
   NotFoundError,
   InvalidRequestError,
@@ -128,6 +129,8 @@ router.post("documents.list", auth(), pagination(), async (ctx) => {
     sort = "updatedAt";
   }
 
+  ctx.assertSort(sort, Document);
+
   // add the users starred state to the response by default
   const starredScope = { method: ["withStarred", user.id] };
   const collectionScope = { method: ["withCollection", user.id] };
@@ -170,6 +173,7 @@ router.post("documents.pinned", auth(), pagination(), async (ctx) => {
   let direction = ctx.body.direction;
   if (direction !== "ASC") direction = "DESC";
   ctx.assertUuid(collectionId, "collectionId is required");
+  ctx.assertSort(sort, Document);
 
   const user = ctx.state.user;
   const collection = await Collection.scope({
@@ -214,6 +218,8 @@ router.post("documents.pinned", auth(), pagination(), async (ctx) => {
 
 router.post("documents.archived", auth(), pagination(), async (ctx) => {
   const { sort = "updatedAt" } = ctx.body;
+  ctx.assertSort(sort, Document);
+
   let direction = ctx.body.direction;
   if (direction !== "ASC") direction = "DESC";
 
@@ -254,6 +260,8 @@ router.post("documents.archived", auth(), pagination(), async (ctx) => {
 
 router.post("documents.deleted", auth(), pagination(), async (ctx) => {
   const { sort = "deletedAt" } = ctx.body;
+  ctx.assertSort(sort, Document);
+
   let direction = ctx.body.direction;
   if (direction !== "ASC") direction = "DESC";
 
@@ -295,6 +303,8 @@ router.post("documents.deleted", auth(), pagination(), async (ctx) => {
 
 router.post("documents.viewed", auth(), pagination(), async (ctx) => {
   let { sort = "updatedAt", direction } = ctx.body;
+  ctx.assertSort(sort, Document);
+
   if (direction !== "ASC") direction = "DESC";
 
   const user = ctx.state.user;
@@ -344,6 +354,8 @@ router.post("documents.viewed", auth(), pagination(), async (ctx) => {
 
 router.post("documents.starred", auth(), pagination(), async (ctx) => {
   let { sort = "updatedAt", direction } = ctx.body;
+  ctx.assertSort(sort, Document);
+
   if (direction !== "ASC") direction = "DESC";
 
   const user = ctx.state.user;
@@ -395,6 +407,8 @@ router.post("documents.starred", auth(), pagination(), async (ctx) => {
 
 router.post("documents.drafts", auth(), pagination(), async (ctx) => {
   let { collectionId, dateFilter, sort = "updatedAt", direction } = ctx.body;
+  ctx.assertSort(sort, Document);
+
   if (direction !== "ASC") direction = "DESC";
 
   const user = ctx.state.user;
@@ -483,7 +497,14 @@ async function loadDocument({ id, shareId, user }) {
       throw new InvalidRequestError("Document could not be found for shareId");
     }
 
-    document = share.document;
+    if (user) {
+      document = await Document.findByPk(share.documentId, {
+        userId: user.id,
+        paranoid: false,
+      });
+    } else {
+      document = share.document;
+    }
 
     if (!share.published) {
       authorize(user, "read", document);
@@ -498,6 +519,8 @@ async function loadDocument({ id, shareId, user }) {
     if (!team.sharing) {
       throw new AuthorizationError();
     }
+
+    await share.update({ lastAccessedAt: new Date() });
   } else {
     document = await Document.findByPk(id, {
       userId: user ? user.id : undefined,
@@ -1157,6 +1180,10 @@ router.post("documents.import", auth(), async (ctx) => {
   const file: any = Object.values(ctx.request.files)[0];
   ctx.assertPresent(file, "file is required");
 
+  if (file.size > env.MAXIMUM_IMPORT_SIZE) {
+    throw new InvalidRequestError("The selected file was too large to import");
+  }
+
   ctx.assertUuid(collectionId, "collectionId must be an uuid");
   if (parentDocumentId) {
     ctx.assertUuid(parentDocumentId, "parentDocumentId must be an uuid");
@@ -1165,7 +1192,7 @@ router.post("documents.import", auth(), async (ctx) => {
   if (index) ctx.assertPositiveInteger(index, "index must be an integer (>=0)");
 
   const user = ctx.state.user;
-  authorize(user, "create", Document);
+  authorize(user, "createDocument", user.team);
 
   const collection = await Collection.scope({
     method: ["withMembership", user.id],
@@ -1234,7 +1261,7 @@ router.post("documents.create", auth(), async (ctx) => {
   if (index) ctx.assertPositiveInteger(index, "index must be an integer (>=0)");
 
   const user = ctx.state.user;
-  authorize(user, "create", Document);
+  authorize(user, "createDocument", user.team);
 
   const collection = await Collection.scope({
     method: ["withMembership", user.id],

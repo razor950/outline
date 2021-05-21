@@ -82,6 +82,12 @@ export function EmailAuthenticationRequiredError(
   return httpErrors(400, message, { redirectUrl, id: "email_auth_required" });
 }
 
+export function MicrosoftGraphError(
+  message: string = "Microsoft Graph API did not return required fields"
+) {
+  return httpErrors(400, message, { id: "graph_error" });
+}
+
 export function GoogleWorkspaceRequiredError(
   message: string = "Google Workspace is required to authenticate"
 ) {
@@ -92,6 +98,18 @@ export function GoogleWorkspaceInvalidError(
   message: string = "Google Workspace is invalid"
 ) {
   return httpErrors(400, message, { id: "hd_not_allowed" });
+}
+
+export function GitHubOrganizationAPIError(
+  message: string = "Github API failed to respond / Invalid Response"
+) {
+  return httpErrors(400, message, { id: "github_org_api" });
+}
+
+export function GitHubOrganizationError(
+  message: string = "User must be a part of at least one Organisation"
+) {
+  return httpErrors(400, message, { id: "no_github_org" });
 }
 
 export function AuthenticationProviderDisabledError(

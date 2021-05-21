@@ -25,7 +25,7 @@ router.post("shares.info", auth(), async (ctx) => {
         }
       : {
           documentId,
-          userId: user.id,
+          teamId: user.teamId,
           revokedAt: { [Op.eq]: null },
         },
   });
@@ -36,7 +36,7 @@ router.post("shares.info", auth(), async (ctx) => {
   authorize(user, "read", share);
 
   ctx.body = {
-    data: presentShare(share),
+    data: presentShare(share, user.isAdmin),
     policies: presentPolicies(user, [share]),
   };
 });
@@ -44,6 +44,7 @@ router.post("shares.info", auth(), async (ctx) => {
 router.post("shares.list", auth(), pagination(), async (ctx) => {
   let { sort = "updatedAt", direction } = ctx.body;
   if (direction !== "ASC") direction = "DESC";
+  ctx.assertSort(sort, Share);
 
   const user = ctx.state.user;
   const where = {
@@ -88,7 +89,7 @@ router.post("shares.list", auth(), pagination(), async (ctx) => {
 
   ctx.body = {
     pagination: ctx.state.pagination,
-    data: shares.map(presentShare),
+    data: shares.map((share) => presentShare(share, user.isAdmin)),
     policies: presentPolicies(user, shares),
   };
 });
@@ -116,7 +117,7 @@ router.post("shares.update", auth(), async (ctx) => {
   });
 
   ctx.body = {
-    data: presentShare(share),
+    data: presentShare(share, user.isAdmin),
     policies: presentPolicies(user, [share]),
   };
 });
@@ -134,9 +135,11 @@ router.post("shares.create", auth(), async (ctx) => {
   const [share, isCreated] = await Share.findOrCreate({
     where: {
       documentId,
-      userId: user.id,
       teamId: user.teamId,
       revokedAt: null,
+    },
+    defaults: {
+      userId: user.id,
     },
   });
 

@@ -21,12 +21,11 @@ import PoliciesStore from "stores/PoliciesStore";
 import UiStore from "stores/UiStore";
 import ErrorSuspended from "scenes/ErrorSuspended";
 import KeyboardShortcuts from "scenes/KeyboardShortcuts";
-import Analytics from "components/Analytics";
 import Button from "components/Button";
 import DocumentHistory from "components/DocumentHistory";
 import Flex from "components/Flex";
+import Guide from "components/Guide";
 import { LoadingIndicatorBar } from "components/LoadingIndicator";
-import Modal from "components/Modal";
 import Sidebar from "components/Sidebar";
 import SettingsSidebar from "components/Sidebar/Settings";
 import SkipNavContent from "components/SkipNavContent";
@@ -121,7 +120,6 @@ class Layout extends React.Component<Props> {
           />
         </Helmet>
         <SkipNavLink />
-        <Analytics />
 
         {this.props.ui.progressBarVisible && <LoadingIndicatorBar />}
         {this.props.notifications}
@@ -163,13 +161,13 @@ class Layout extends React.Component<Props> {
             />
           </Switch>
         </Container>
-        <Modal
+        <Guide
           isOpen={this.keyboardShortcutsOpen}
           onRequestClose={this.handleCloseKeyboardShortcuts}
           title={t("Keyboard shortcuts")}
         >
           <KeyboardShortcuts />
-        </Modal>
+        </Guide>
       </Container>
     );
   }
@@ -204,7 +202,7 @@ const Content = styled(Flex)`
     props.$isResizing ? "none" : `margin-left 100ms ease-out`};
 
   @media print {
-    margin: 0;
+    margin: 0 !important;
   }
 
   ${breakpoint("mobile", "tablet")`

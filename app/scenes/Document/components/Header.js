@@ -3,25 +3,23 @@ import { observer } from "mobx-react";
 import {
   TableOfContentsIcon,
   EditIcon,
-  GlobeIcon,
   PlusIcon,
   MoreIcon,
 } from "outline-icons";
 import * as React from "react";
-import { Trans, useTranslation } from "react-i18next";
+import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
 import Document from "models/Document";
-import DocumentShare from "scenes/DocumentShare";
 import { Action, Separator } from "components/Actions";
 import Badge from "components/Badge";
 import Breadcrumb, { Slash } from "components/Breadcrumb";
 import Button from "components/Button";
 import Collaborators from "components/Collaborators";
-import Fade from "components/Fade";
 import Header from "components/Header";
-import Modal from "components/Modal";
 import Tooltip from "components/Tooltip";
+import ShareButton from "./ShareButton";
+import useMobile from "hooks/useMobile";
 import useStores from "hooks/useStores";
 import DocumentMenu from "menus/DocumentMenu";
 import NewChildDocumentMenu from "menus/NewChildDocumentMenu";
@@ -31,6 +29,7 @@ import { newDocumentUrl, editDocumentUrl } from "utils/routeHelpers";
 
 type Props = {|
   document: Document,
+  isShare: boolean,
   isDraft: boolean,
   isEditing: boolean,
   isRevision: boolean,
@@ -48,6 +47,7 @@ type Props = {|
 
 function DocumentHeader({
   document,
+  isShare,
   isEditing,
   isDraft,
   isPublishing,
@@ -58,8 +58,8 @@ function DocumentHeader({
   onSave,
 }: Props) {
   const { t } = useTranslation();
-  const { auth, ui, shares, policies } = useStores();
-  const [showShareModal, setShowShareModal] = React.useState(false);
+  const { auth, ui, policies } = useStores();
+  const isMobile = useMobile();
 
   const handleSave = React.useCallback(() => {
     onSave({ done: true });
@@ -69,21 +69,6 @@ function DocumentHeader({
     onSave({ done: true, publish: true });
   }, [onSave]);
 
-  const handleShareLink = React.useCallback(
-    async (ev: SyntheticEvent<>) => {
-      await document.share();
-
-      setShowShareModal(true);
-    },
-    [document]
-  );
-
-  const handleCloseShareModal = React.useCallback(() => {
-    setShowShareModal(false);
-  }, []);
-
-  const share = shares.getByDocumentId(document.id);
-  const isPubliclyShared = share && share.published;
   const isNew = document.isNew;
   const isTemplate = document.isTemplate;
   const can = policies.abilities(document.id);
@@ -91,41 +76,64 @@ function DocumentHeader({
   const canToggleEmbeds = auth.team && auth.team.documentEmbeds;
   const canEdit = can.update && !isEditing;
 
+  const toc = (
+    <Tooltip
+      tooltip={ui.tocVisible ? t("Hide contents") : t("Show contents")}
+      shortcut={`ctrl+${metaDisplay}+h`}
+      delay={250}
+      placement="bottom"
+    >
+      <Button
+        onClick={
+          ui.tocVisible ? ui.hideTableOfContents : ui.showTableOfContents
+        }
+        icon={<TableOfContentsIcon />}
+        iconColor="currentColor"
+        borderOnHover
+        neutral
+      />
+    </Tooltip>
+  );
+
+  const editAction = (
+    <Action>
+      <Tooltip
+        tooltip={t("Edit {{noun}}", { noun: document.noun })}
+        shortcut="e"
+        delay={500}
+        placement="bottom"
+      >
+        <Button
+          as={Link}
+          icon={<EditIcon />}
+          to={editDocumentUrl(document)}
+          neutral
+        >
+          {t("Edit")}
+        </Button>
+      </Tooltip>
+    </Action>
+  );
+
+  if (isShare) {
+    return (
+      <Header
+        title={document.title}
+        breadcrumb={toc}
+        actions={canEdit ? editAction : <div />}
+      />
+    );
+  }
+
   return (
     <>
-      <Modal
-        isOpen={showShareModal}
-        onRequestClose={handleCloseShareModal}
-        title={t("Share document")}
-      >
-        <DocumentShare document={document} onSubmit={handleCloseShareModal} />
-      </Modal>
       <Header
         breadcrumb={
           <Breadcrumb document={document}>
             {!isEditing && (
               <>
                 <Slash />
-                <Tooltip
-                  tooltip={
-                    ui.tocVisible ? t("Hide contents") : t("Show contents")
-                  }
-                  shortcut={`ctrl+${metaDisplay}+h`}
-                  delay={250}
-                  placement="bottom"
-                >
-                  <Button
-                    onClick={
-                      ui.tocVisible
-                        ? ui.hideTableOfContents
-                        : ui.showTableOfContents
-                    }
-                    icon={<TableOfContentsIcon />}
-                    iconColor="currentColor"
-                    borderOnHover
-                    neutral
-                  />
-                </Tooltip>
+                {toc}
               </>
             )}
           </Breadcrumb>
@@ -139,41 +147,18 @@ function DocumentHeader({
         actions={
           <>
             {!isPublishing && isSaving && <Status>{t("Saving")}…</Status>}
-            <Fade>
-              <Collaborators
-                document={document}
-                currentUserId={auth.user ? auth.user.id : undefined}
-              />
-            </Fade>
+            <Collaborators
+              document={document}
+              currentUserId={auth.user ? auth.user.id : undefined}
+            />
             {isEditing && !isTemplate && isNew && (
               <Action>
                 <TemplatesMenu document={document} />
               </Action>
             )}
-            {!isEditing && canShareDocument && (
+            {!isEditing && canShareDocument && (!isMobile || !isTemplate) && (
               <Action>
-                <Tooltip
-                  tooltip={
-                    isPubliclyShared ? (
-                      <Trans>
-                        Anyone with the link <br />
-                        can view this document
-                      </Trans>
-                    ) : (
-                      ""
-                    )
-                  }
-                  delay={500}
-                  placement="bottom"
-                >
-                  <Button
-                    icon={isPubliclyShared ? <GlobeIcon /> : undefined}
-                    onClick={handleShareLink}
-                    neutral
-                  >
-                    {t("Share")}
-                  </Button>
-                </Tooltip>
+                <ShareButton document={document} />
               </Action>
             )}
             {isEditing && (
@@ -196,26 +181,8 @@ function DocumentHeader({
                 </Action>
               </>
             )}
-            {canEdit && (
-              <Action>
-                <Tooltip
-                  tooltip={t("Edit {{noun}}", { noun: document.noun })}
-                  shortcut="e"
-                  delay={500}
-                  placement="bottom"
-                >
-                  <Button
-                    as={Link}
-                    icon={<EditIcon />}
-                    to={editDocumentUrl(document)}
-                    neutral
-                  >
-                    {t("Edit")}
-                  </Button>
-                </Tooltip>
-              </Action>
-            )}
-            {canEdit && can.createChildDocument && (
+            {canEdit && editAction}
+            {canEdit && can.createChildDocument && !isMobile && (
               <Action>
                 <NewChildDocumentMenu
                   document={document}

@@ -178,7 +178,7 @@ describe("#searchForTeam", () => {
   test("should not return search results from private collections", async () => {
     const team = await buildTeam();
     const collection = await buildCollection({
-      private: true,
+      permission: null,
       teamId: team.id,
     });
     await buildDocument({
@@ -194,6 +194,12 @@ describe("#searchForTeam", () => {
   test("should handle no collections", async () => {
     const team = await buildTeam();
     const { results } = await Document.searchForTeam(team, "test");
+    expect(results.length).toBe(0);
+  });
+
+  test("should handle backslashes in search term", async () => {
+    const team = await buildTeam();
+    const { results } = await Document.searchForTeam(team, "\\\\");
     expect(results.length).toBe(0);
   });
 
