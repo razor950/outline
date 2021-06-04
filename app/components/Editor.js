@@ -15,7 +15,9 @@ import { isModKey } from "utils/keyboard";
 import { uploadFile } from "utils/uploadFile";
 import { isInternalUrl } from "utils/urls";
 
-const RichMarkdownEditor = React.lazy(() => import("rich-markdown-editor"));
+const RichMarkdownEditor = React.lazy(() =>
+  import(/* webpackChunkName: "rich-markdown-editor" */ "rich-markdown-editor")
+);
 
 const EMPTY_ARRAY = [];
 
@@ -27,6 +29,7 @@ export type Props = {|
   grow?: boolean,
   disableEmbeds?: boolean,
   ui?: UiStore,
+  shareId?: ?string,
   autoFocus?: boolean,
   template?: boolean,
   placeholder?: string,
@@ -55,7 +58,7 @@ type PropsWithRef = Props & {
 };
 
 function Editor(props: PropsWithRef) {
-  const { id, ui, history } = props;
+  const { id, ui, shareId, history } = props;
   const { t } = useTranslation();
   const isPrinting = useMediaQuery("print");
 
@@ -89,12 +92,16 @@ function Editor(props: PropsWithRef) {
           }
         }
 
+        if (shareId) {
+          navigateTo = `/share/${shareId}${navigateTo}`;
+        }
+
         history.push(navigateTo);
       } else if (href) {
         window.open(href, "_blank");
       }
     },
-    [history]
+    [history, shareId]
   );
 
   const onShowToast = React.useCallback(
@@ -127,6 +134,7 @@ function Editor(props: PropsWithRef) {
       deleteRow: t("Delete row"),
       deleteTable: t("Delete table"),
       deleteImage: t("Delete image"),
+      downloadImage: t("Download image"),
       alignImageLeft: t("Float left"),
       alignImageRight: t("Float right"),
       alignImageDefault: t("Center large"),
