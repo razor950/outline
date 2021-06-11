@@ -23,7 +23,7 @@ export default class Collection extends BaseModel {
   updatedAt: string;
   deletedAt: ?string;
   sort: { field: string, direction: "asc" | "desc" };
-  url: string;
+  urlId: string;
 
   @computed
   get isEmpty(): boolean {
