@@ -173,8 +173,15 @@ export class Mailer {
       let smtpConfig = {
         host: process.env.SMTP_HOST,
         port: process.env.SMTP_PORT,
-        secure: process.env.NODE_ENV === "production",
+        secure:
+          "SMTP_SECURE" in process.env
+            ? process.env.SMTP_SECURE === "true"
+            : process.env.NODE_ENV === "production",
         auth: undefined,
+        tls:
+        "SMTP_TLS_CIPHERS" in process.env
+          ? { ciphers: process.env.SMTP_TLS_CIPHERS }
+          : undefined,
       };
 
       if (process.env.SMTP_USERNAME) {
