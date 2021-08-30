@@ -13,6 +13,7 @@ import {
   IntegrationAuthentication,
   Integration,
   AuthenticationProvider,
+  FileOperation,
 } from "../models";
 
 let count = 1;
@@ -64,6 +65,23 @@ export function buildEvent(overrides: Object = {}) {
   return Event.create({
     name: "documents.publish",
     ip: "127.0.0.1",
+    ...overrides,
+  });
+}
+
+export async function buildGuestUser(overrides: Object = {}) {
+  if (!overrides.teamId) {
+    const team = await buildTeam();
+    overrides.teamId = team.id;
+  }
+
+  count++;
+
+  return User.create({
+    email: `user${count}@example.com`,
+    name: `User ${count}`,
+    createdAt: new Date("2018-01-01T00:00:00.000Z"),
+    lastActiveAt: new Date("2018-01-01T00:00:00.000Z"),
     ...overrides,
   });
 }
@@ -234,6 +252,31 @@ export async function buildDocument(overrides: Object = {}) {
     publishedAt: new Date(),
     lastModifiedById: overrides.userId,
     createdById: overrides.userId,
+    ...overrides,
+  });
+}
+
+export async function buildFileOperation(overrides: Object = {}) {
+  if (!overrides.teamId) {
+    const team = await buildTeam();
+    overrides.teamId = team.id;
+  }
+
+  if (!overrides.userId) {
+    const user = await buildAdmin({ teamId: overrides.teamId });
+    overrides.userId = user.id;
+  }
+
+  if (!overrides.collectionId) {
+    const collection = await buildCollection(overrides);
+    overrides.collectionId = collection.id;
+  }
+
+  return FileOperation.create({
+    state: "creating",
+    size: 0,
+    key: "key/to/aws/file.zip",
+    url: "https://www.urltos3file.com/file.zip",
     ...overrides,
   });
 }

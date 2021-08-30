@@ -9,49 +9,13 @@ import {
   MenuItem as BaseMenuItem,
 } from "reakit/Menu";
 import styled from "styled-components";
+import Flex from "components/Flex";
+import MenuIconWrapper from "components/MenuIconWrapper";
+import Header from "./Header";
 import MenuItem, { MenuAnchor } from "./MenuItem";
 import Separator from "./Separator";
 import ContextMenu from ".";
-
-type TMenuItem =
-  | {|
-      title: React.Node,
-      to: string,
-      visible?: boolean,
-      selected?: boolean,
-      disabled?: boolean,
-    |}
-  | {|
-      title: React.Node,
-      onClick: (event: SyntheticEvent<>) => void | Promise<void>,
-      visible?: boolean,
-      selected?: boolean,
-      disabled?: boolean,
-    |}
-  | {|
-      title: React.Node,
-      href: string,
-      visible?: boolean,
-      selected?: boolean,
-      disabled?: boolean,
-    |}
-  | {|
-      title: React.Node,
-      visible?: boolean,
-      disabled?: boolean,
-      style?: Object,
-      hover?: boolean,
-      items: TMenuItem[],
-    |}
-  | {|
-      type: "separator",
-      visible?: boolean,
-    |}
-  | {|
-      type: "heading",
-      visible?: boolean,
-      title: React.Node,
-    |};
+import { type MenuItem as TMenuItem } from "types";
 
 type Props = {|
   items: TMenuItem[],
@@ -83,7 +47,7 @@ const Submenu = React.forwardRef(({ templateItems, title, ...rest }, ref) => {
   );
 });
 
-function Template({ items, ...menu }: Props): React.Node {
+export function filterTemplateItems(items: TMenuItem[]): TMenuItem[] {
   let filtered = items.filter((item) => item.visible !== false);
 
   // this block literally just trims unneccessary separators
@@ -101,7 +65,19 @@ function Template({ items, ...menu }: Props): React.Node {
     return [...acc, item];
   }, []);
 
-  return filtered.map((item, index) => {
+  return filtered;
+}
+
+function Template({ items, ...menu }: Props): React.Node {
+  const filteredTemplates = filterTemplateItems(items);
+  const iconIsPresentInAnyMenuItem = filteredTemplates.find(
+    (item) => !!item.icon
+  );
+
+  return filteredTemplates.map((item, index) => {
+    if (iconIsPresentInAnyMenuItem)
+      item.icon = item.icon ? item.icon : <MenuIconWrapper />;
+
     if (item.to) {
       return (
         <MenuItem
@@ -110,6 +86,7 @@ function Template({ items, ...menu }: Props): React.Node {
           key={index}
           disabled={item.disabled}
           selected={item.selected}
+          icon={item.icon}
           {...menu}
         >
           {item.title}
@@ -124,7 +101,9 @@ function Template({ items, ...menu }: Props): React.Node {
           key={index}
           disabled={item.disabled}
           selected={item.selected}
-          target="_blank"
+          level={item.level}
+          target={item.href.startsWith("#") ? undefined : "_blank"}
+          icon={item.icon}
           {...menu}
         >
           {item.title}
@@ -140,6 +119,7 @@ function Template({ items, ...menu }: Props): React.Node {
           disabled={item.disabled}
           selected={item.selected}
           key={index}
+          icon={item.icon}
           {...menu}
         >
           {item.title}
@@ -153,7 +133,7 @@ function Template({ items, ...menu }: Props): React.Node {
           key={index}
           as={Submenu}
           templateItems={item.items}
-          title={item.title}
+          title={<Title title={item.title} icon={item.icon} />}
           {...menu}
         />
       );
@@ -163,8 +143,22 @@ function Template({ items, ...menu }: Props): React.Node {
       return <Separator key={index} />;
     }
 
+    if (item.type === "heading") {
+      return <Header>{item.title}</Header>;
+    }
+
+    console.warn("Unrecognized menu item", item);
     return null;
   });
+}
+
+function Title({ title, icon }) {
+  return (
+    <Flex align="center">
+      {icon && <MenuIconWrapper>{icon}</MenuIconWrapper>}
+      {title}
+    </Flex>
+  );
 }
 
 export default React.memo<Props>(Template);

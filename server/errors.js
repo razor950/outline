@@ -100,18 +100,6 @@ export function GoogleWorkspaceInvalidError(
   return httpErrors(400, message, { id: "hd_not_allowed" });
 }
 
-export function GitHubOrganizationAPIError(
-  message: string = "Github API failed to respond / Invalid Response"
-) {
-  return httpErrors(400, message, { id: "github_org_api" });
-}
-
-export function GitHubOrganizationError(
-  message: string = "User must be a part of at least one Organisation"
-) {
-  return httpErrors(400, message, { id: "no_github_org" });
-}
-
 export function AuthenticationProviderDisabledError(
   message: string = "Authentication method has been disabled by an admin",
   redirectUrl: string = env.URL

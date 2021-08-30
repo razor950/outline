@@ -14,6 +14,7 @@ type Props = {|
   document: Document,
   isDraft: boolean,
   to?: string,
+  rtl?: boolean,
 |};
 
 function DocumentMetaWithViews({ to, isDraft, document, ...rest }: Props) {
@@ -41,7 +42,7 @@ function DocumentMetaWithViews({ to, isDraft, document, ...rest }: Props) {
         <PopoverDisclosure {...popover}>
           {(props) => (
             <>
-              &nbsp;&middot;&nbsp;
+              &nbsp;•&nbsp;
               <a {...props}>
                 {t("Viewed by")}{" "}
                 {onlyYou
@@ -62,6 +63,7 @@ function DocumentMetaWithViews({ to, isDraft, document, ...rest }: Props) {
 }
 
 const Meta = styled(DocumentMeta)`
+  justify-content: ${(props) => (props.rtl ? "flex-end" : "flex-start")};
   margin: -12px 0 2em 0;
   font-size: 14px;
   position: relative;

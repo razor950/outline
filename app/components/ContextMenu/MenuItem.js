@@ -4,6 +4,7 @@ import * as React from "react";
 import { MenuItem as BaseMenuItem } from "reakit/Menu";
 import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
+import MenuIconWrapper from "../MenuIconWrapper";
 
 type Props = {|
   onClick?: (SyntheticEvent<>) => void | Promise<void>,
@@ -15,6 +16,8 @@ type Props = {|
   target?: "_blank",
   as?: string | React.ComponentType<*>,
   hide?: () => void,
+  level?: number,
+  icon?: React.Node,
 |};
 
 const MenuItem = ({
@@ -24,19 +27,31 @@ const MenuItem = ({
   disabled,
   as,
   hide,
+  icon,
   ...rest
 }: Props) => {
   const handleClick = React.useCallback(
     (ev) => {
       if (onClick) {
+        ev.preventDefault();
+        ev.stopPropagation();
         onClick(ev);
       }
+
       if (hide) {
         hide();
       }
     },
-    [hide, onClick]
+    [onClick, hide]
   );
+
+  // Preventing default mousedown otherwise menu items do not work in Firefox,
+  // which triggers the hideOnClickOutside handler first via mousedown – hiding
+  // and un-rendering the menu contents.
+  const handleMouseDown = React.useCallback((ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+  }, []);
 
   return (
     <BaseMenuItem
@@ -51,6 +66,7 @@ const MenuItem = ({
           $toggleable={selected !== undefined}
           as={onClick ? "button" : as}
           onClick={handleClick}
+          onMouseDown={handleMouseDown}
         >
           {selected !== undefined && (
             <>
@@ -58,6 +74,7 @@ const MenuItem = ({
               &nbsp;
             </>
           )}
+          {icon && <MenuIconWrapper>{icon}</MenuIconWrapper>}
           {children}
         </MenuAnchor>
       )}
@@ -76,6 +93,7 @@ export const MenuAnchor = styled.a`
   margin: 0;
   border: 0;
   padding: 12px;
+  padding-left: ${(props) => 12 + props.level * 10}px;
   width: 100%;
   min-height: 32px;
   background: none;
@@ -116,8 +134,8 @@ export const MenuAnchor = styled.a`
   `};
 
   ${breakpoint("tablet")`
-    padding: ${(props) => (props.$toggleable ? "4px 12px" : "6px 12px")};
-    font-size: 15px;
+    padding: 4px 12px;
+    font-size: 14px;
   `};
 `;
 

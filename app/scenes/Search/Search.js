@@ -6,7 +6,6 @@ import { observer, inject } from "mobx-react";
 import { PlusIcon } from "outline-icons";
 import queryString from "query-string";
 import * as React from "react";
-import ReactDOM from "react-dom";
 import { withTranslation, Trans, type TFunction } from "react-i18next";
 import keydown from "react-keydown";
 import { withRouter, Link } from "react-router-dom";
@@ -103,8 +102,9 @@ class Search extends React.Component<Props> {
     if (ev.key === "ArrowDown") {
       ev.preventDefault();
       if (this.firstDocument) {
-        const element = ReactDOM.findDOMNode(this.firstDocument);
-        if (element instanceof HTMLElement) element.focus();
+        if (this.firstDocument instanceof HTMLElement) {
+          this.firstDocument.focus();
+        }
       }
     }
   };
@@ -140,10 +140,13 @@ class Search extends React.Component<Props> {
   }) => {
     this.props.history.replace({
       pathname: this.props.location.pathname,
-      search: queryString.stringify({
-        ...queryString.parse(this.props.location.search),
-        ...search,
-      }),
+      search: queryString.stringify(
+        {
+          ...queryString.parse(this.props.location.search),
+          ...search,
+        },
+        { skipEmptyString: true }
+      ),
     });
   };
 
@@ -265,6 +268,7 @@ class Search extends React.Component<Props> {
     const showShortcutTip =
       !this.pinToTop && location.state && location.state.fromMenu;
     const can = policies.abilities(auth.team?.id ? auth.team.id : "");
+    const canCollection = policies.abilities(this.collectionId || "");
 
     return (
       <Container auto>
@@ -332,7 +336,9 @@ class Search extends React.Component<Props> {
                   {can.createDocument && <Trans>Create a new document?</Trans>}
                 </HelpText>
                 <Wrapper>
-                  {this.collectionId && can.createDocument ? (
+                  {this.collectionId &&
+                  can.createDocument &&
+                  canCollection.update ? (
                     <Button
                       onClick={this.handleNewDoc}
                       icon={<PlusIcon />}

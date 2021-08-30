@@ -7,10 +7,6 @@ export function homeUrl(): string {
   return "/home";
 }
 
-export function starredUrl(): string {
-  return "/starred";
-}
-
 export function newCollectionUrl(): string {
   return "/collection/new";
 }
@@ -53,7 +49,7 @@ export function documentHistoryUrl(doc: Document, revisionId?: string): string {
  * Replace full url's document part with the new one in case
  * the document slug has been updated
  */
- export function updateDocumentUrl(oldUrl: string, document: Document): string {
+export function updateDocumentUrl(oldUrl: string, document: Document): string {
   // Update url to match the current one
   return oldUrl.replace(new RegExp("/doc/[0-9a-zA-Z-_~]*"), document.url);
 }

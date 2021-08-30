@@ -8,13 +8,12 @@ import Drafts from "scenes/Drafts";
 import Error404 from "scenes/Error404";
 import Home from "scenes/Home";
 import Search from "scenes/Search";
-import Starred from "scenes/Starred";
 import Templates from "scenes/Templates";
 import Trash from "scenes/Trash";
 
 import CenteredContent from "components/CenteredContent";
 import Layout from "components/Layout";
-import LoadingPlaceholder from "components/LoadingPlaceholder";
+import PlaceholderDocument from "components/PlaceholderDocument";
 import Route from "components/ProfiledRoute";
 import SocketProvider from "components/SocketProvider";
 import { matchDocumentSlug as slug } from "utils/routeHelpers";
@@ -22,7 +21,6 @@ import { matchDocumentSlug as slug } from "utils/routeHelpers";
 const SettingsRoutes = React.lazy(() =>
   import(/* webpackChunkName: "settings" */ "./settings")
 );
-
 const KeyedDocument = React.lazy(() =>
   import(
     /* webpackChunkName: "keyed-document" */ "scenes/Document/KeyedDocument"
@@ -41,10 +39,10 @@ export default function AuthenticatedRoutes() {
   return (
     <SocketProvider>
       <Layout>
-      <React.Suspense
+        <React.Suspense
           fallback={
             <CenteredContent>
-              <LoadingPlaceholder />
+              <PlaceholderDocument />
             </CenteredContent>
           }
         >
@@ -52,13 +50,12 @@ export default function AuthenticatedRoutes() {
             <Redirect from="/dashboard" to="/home" />
             <Route path="/home/:tab" component={Home} />
             <Route path="/home" component={Home} />
-            <Route exact path="/starred" component={Starred} />
-            <Route exact path="/starred/:sort" component={Starred} />
             <Route exact path="/templates" component={Templates} />
             <Route exact path="/templates/:sort" component={Templates} />
             <Route exact path="/drafts" component={Drafts} />
             <Route exact path="/archive" component={Archive} />
             <Route exact path="/trash" component={Trash} />
+            <Redirect exact from="/starred" to="/home" />
             <Redirect exact from="/collections/*" to="/collection/*" />
             <Route exact path="/collection/:id/new" component={DocumentNew} />
             <Route exact path="/collection/:id/:tab" component={Collection} />
@@ -74,9 +71,10 @@ export default function AuthenticatedRoutes() {
             <Route exact path="/search" component={Search} />
             <Route exact path="/search/:term" component={Search} />
             <Route path="/404" component={Error404} />
+
             <SettingsRoutes />
             <Route component={NotFound} />
-            </Switch>{" "}
+          </Switch>{" "}
         </React.Suspense>
       </Layout>
     </SocketProvider>

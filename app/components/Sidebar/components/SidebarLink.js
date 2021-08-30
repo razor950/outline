@@ -1,4 +1,5 @@
 // @flow
+import { transparentize } from "polished";
 import * as React from "react";
 import { withRouter, type RouterHistory, type Match } from "react-router-dom";
 import styled, { withTheme } from "styled-components";
@@ -27,30 +28,35 @@ type Props = {
   theme: Theme,
   exact?: boolean,
   depth?: number,
+  scrollIntoViewIfNeeded?: boolean,
 };
 
-function SidebarLink({
-  icon,
-  children,
-  onClick,
-  onMouseEnter,
-  to,
-  label,
-  active,
-  isActiveDrop,
-  menu,
-  showActions,
-  theme,
-  exact,
-  href,
-  depth,
-  history,
-  match,
-  className,
-}: Props) {
+function SidebarLink(
+  {
+    icon,
+    children,
+    onClick,
+    onMouseEnter,
+    to,
+    label,
+    active,
+    isActiveDrop,
+    menu,
+    showActions,
+    theme,
+    exact,
+    href,
+    depth,
+    history,
+    match,
+    className,
+    scrollIntoViewIfNeeded,
+  }: Props,
+  ref
+) {
   const style = React.useMemo(() => {
     return {
-      paddingLeft: `${(depth || 0) * 16 + 16}px`,
+      paddingLeft: `${(depth || 0) * 16 + 12}px`,
     };
   }, [depth]);
 
@@ -69,6 +75,7 @@ function SidebarLink({
     <>
       <Link
         $isActiveDrop={isActiveDrop}
+        scrollIntoViewIfNeeded={scrollIntoViewIfNeeded}
         activeStyle={isActiveDrop ? activeDropStyle : activeStyle}
         style={active ? activeStyle : style}
         onClick={onClick}
@@ -78,6 +85,7 @@ function SidebarLink({
         as={to ? undefined : href ? "a" : "div"}
         href={href}
         className={className}
+        ref={ref}
       >
         {icon && <IconWrapper>{icon}</IconWrapper>}
         <Label>{label}</Label>
@@ -126,6 +134,7 @@ const Link = styled(NavLink)`
   padding: 6px 16px;
   border-radius: 4px;
   transition: background 50ms, color 50ms;
+  user-select: none;
   background: ${(props) =>
     props.$isActiveDrop ? props.theme.slateDark : "inherit"};
   color: ${(props) =>
@@ -141,7 +150,8 @@ const Link = styled(NavLink)`
 
   &:focus {
     color: ${(props) => props.theme.text};
-    background: ${(props) => props.theme.black05};
+    background: ${(props) =>
+      transparentize("0.25", props.theme.sidebarItemBackground)};
   }
 
   ${breakpoint("tablet")`
@@ -150,15 +160,14 @@ const Link = styled(NavLink)`
   `}
 
   @media (hover: hover) {
-    &:hover + ${Actions},
-    &:active + ${Actions} {
-        display: inline-flex;
-        svg {
-          opacity: 0.75;
-        }
+    &:hover + ${Actions}, &:active + ${Actions} {
+      display: inline-flex;
+
+      svg {
+        opacity: 0.75;
       }
     }
-    
+
     &:hover {
       color: ${(props) =>
         props.$isActiveDrop ? props.theme.white : props.theme.text};
@@ -171,6 +180,9 @@ const Label = styled.div`
   width: 100%;
   max-height: 4.8em;
   line-height: 1.6;
+  * {
+    unicode-bidi: plaintext;
+  }
 `;
 
-export default withRouter(withTheme(SidebarLink));
+export default withRouter(withTheme(React.forwardRef(SidebarLink)));

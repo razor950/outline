@@ -8,10 +8,11 @@ import AuthStore from "stores/AuthStore";
 import CollectionsStore from "stores/CollectionsStore";
 import DocumentPresenceStore from "stores/DocumentPresenceStore";
 import DocumentsStore from "stores/DocumentsStore";
+import FileOperationsStore from "stores/FileOperationsStore";
 import GroupsStore from "stores/GroupsStore";
 import MembershipsStore from "stores/MembershipsStore";
 import PoliciesStore from "stores/PoliciesStore";
-import UiStore from "stores/UiStore";
+import ToastsStore from "stores/ToastsStore";
 import ViewsStore from "stores/ViewsStore";
 import { getVisibilityListener, getPageVisible } from "utils/pageVisibility";
 
@@ -27,7 +28,8 @@ type Props = {
   policies: PoliciesStore,
   views: ViewsStore,
   auth: AuthStore,
-  ui: UiStore,
+  toasts: ToastsStore,
+  fileOperations: FileOperationsStore,
 };
 
 @observer
@@ -72,7 +74,7 @@ class SocketProvider extends React.Component<Props> {
 
     const {
       auth,
-      ui,
+      toasts,
       documents,
       collections,
       groups,
@@ -80,6 +82,7 @@ class SocketProvider extends React.Component<Props> {
       policies,
       presence,
       views,
+      fileOperations,
     } = this.props;
     if (!auth.token) return;
 
@@ -113,7 +116,7 @@ class SocketProvider extends React.Component<Props> {
 
     this.socket.on("unauthorized", (err) => {
       this.socket.authenticated = false;
-      ui.showToast(err.message, {
+      toasts.showToast(err.message, {
         type: "error",
       });
       throw err;
@@ -250,6 +253,10 @@ class SocketProvider extends React.Component<Props> {
       documents.starredIds.set(event.documentId, false);
     });
 
+    this.socket.on("documents.permanent_delete", (event) => {
+      documents.remove(event.documentId);
+    });
+
     // received when a user is given access to a collection
     // if the user is us then we go ahead and load the collection from API.
     this.socket.on("collections.add_user", (event) => {
@@ -280,6 +287,21 @@ class SocketProvider extends React.Component<Props> {
       const collection = collections.get(event.collectionId);
       if (collection) {
         collection.updateIndex(event.index);
+      }
+    });
+
+    this.socket.on("fileOperations.update", async (event) => {
+      const user = auth.user;
+      let collection = null;
+
+      if (event.collectionId)
+        collection = await collections.fetch(event.collectionId);
+      if (user) {
+        fileOperations.add({
+          ...event,
+          user,
+          collection,
+        });
       }
     });
 
@@ -334,12 +356,13 @@ class SocketProvider extends React.Component<Props> {
 
 export default inject(
   "auth",
-  "ui",
+  "toasts",
   "documents",
   "collections",
   "groups",
   "memberships",
   "presence",
   "policies",
-  "views"
+  "views",
+  "fileOperations"
 )(SocketProvider);

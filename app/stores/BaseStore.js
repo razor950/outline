@@ -140,6 +140,7 @@ export default class BaseStore<T: BaseModel> {
     }
 
     const item = this.data.get(id);
+
     if (item && !options.force) return item;
 
     this.isFetching = true;

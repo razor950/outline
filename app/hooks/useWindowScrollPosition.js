@@ -1,4 +1,3 @@
-
 // @flow
 // Based on https://github.com/rehooks/window-scroll-position which is no longer
 // maintained.
