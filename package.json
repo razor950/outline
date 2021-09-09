@@ -116,6 +116,7 @@
     "passport": "^0.4.1",
     "passport-github2": "^0.1.12",
     "passport-google-oauth2": "^0.2.0",
+    "passport-oauth2": "^1.6.0",
     "passport-slack-oauth2": "^1.1.0",
     "pg": "^8.5.1",
     "pg-hstore": "^2.3.3",
@@ -213,5 +214,5 @@
     "dot-prop": "^5.2.0",
     "js-yaml": "^3.13.1"
   },
-  "version": "0.58.0"
+  "version": "0.59.0"
 }
