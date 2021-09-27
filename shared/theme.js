@@ -40,6 +40,7 @@ const colors = {
     blue: "#3633FF",
     marine: "#2BC2FF",
     green: "#42DED1",
+    yellow: "#F5BE31",
   },
 };
 
@@ -92,6 +93,7 @@ export const base = {
   blockToolbarItem: colors.almostBlack,
   blockToolbarText: colors.almostBlack,
   blockToolbarTextSelected: colors.black,
+  blockToolbarSelectedBackground: colors.slateLight,
   blockToolbarHoverBackground: colors.slateLight,
   blockToolbarDivider: colors.slateLight,
   blockToolbarIcon: undefined,
