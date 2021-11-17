@@ -8,6 +8,7 @@ import {
   Backlink,
   CollectionUser,
   SearchQuery,
+  Event,
 } from "../../models";
 import webService from "../../services/web";
 import {
@@ -1058,7 +1059,7 @@ describe("#documents.search", () => {
   });
 
   it("should strip junk from search term", async () => {
-    const { user } = await seed();
+    const user = await buildUser();
     const firstResult = await buildDocument({
       title: "search term",
       text: "this is some random text of the document body",
@@ -1136,7 +1137,7 @@ describe("#documents.search", () => {
   });
 
   it("should not return draft documents created by other users", async () => {
-    const { user } = await seed();
+    const user = await buildUser();
     await buildDocument({
       title: "search term",
       text: "search term",
@@ -1175,7 +1176,7 @@ describe("#documents.search", () => {
   });
 
   it("should return archived documents if chosen", async () => {
-    const { user } = await seed();
+    const user = await buildUser();
     const document = await buildDocument({
       title: "search term",
       text: "search term",
@@ -1229,7 +1230,11 @@ describe("#documents.search", () => {
   });
 
   it("should return documents for a specific private collection", async () => {
-    const { user, collection } = await seed();
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+    });
+
     collection.permission = null;
     await collection.save();
 
@@ -2005,6 +2010,9 @@ describe("#documents.update", () => {
     expect(res.status).toEqual(200);
     expect(body.data.title).toBe("Updated title");
     expect(body.data.text).toBe("Updated text");
+
+    const events = await Event.findAll();
+    expect(events.length).toEqual(1);
   });
 
   it("should not add template to collection structure when publishing", async () => {
@@ -2068,6 +2076,9 @@ describe("#documents.update", () => {
     expect(res.status).toEqual(200);
     expect(body.data.publishedAt).toBeTruthy();
     expect(body.policies[0].abilities.update).toEqual(true);
+
+    const events = await Event.findAll();
+    expect(events.length).toEqual(1);
   });
 
   it("should not edit archived document", async () => {
@@ -2258,6 +2269,24 @@ describe("#documents.update", () => {
 
     expect(res.status).toEqual(200);
     expect(body.data.text).toBe("");
+  });
+
+  it("should not produce event if nothing changes", async () => {
+    const { user, document } = await seed();
+
+    const res = await server.post("/api/documents.update", {
+      body: {
+        token: user.getJwtToken(),
+        id: document.id,
+        lastRevision: document.revision,
+        title: document.title,
+        text: document.text,
+      },
+    });
+    expect(res.status).toEqual(200);
+
+    const events = await Event.findAll();
+    expect(events.length).toEqual(0);
   });
 
   it("should require authentication", async () => {

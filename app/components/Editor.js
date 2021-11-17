@@ -15,7 +15,7 @@ import useToasts from "hooks/useToasts";
 import { type Theme } from "types";
 import { isModKey } from "utils/keyboard";
 import { uploadFile } from "utils/uploadFile";
-import { isInternalUrl } from "utils/urls";
+import { isInternalUrl, isHash } from "utils/urls";
 
 const RichMarkdownEditor = React.lazy(() =>
   import(/* webpackChunkName: "rich-markdown-editor" */ "rich-markdown-editor")
@@ -40,6 +40,7 @@ export type Props = {|
   maxLength?: number,
   scrollTo?: string,
   theme?: Theme,
+  className?: string,
   handleDOMEvents?: Object,
   readOnlyWriteCheckboxes?: boolean,
   onBlur?: (event: SyntheticEvent<>) => any,
@@ -78,7 +79,7 @@ function Editor(props: PropsWithRef) {
   const onClickLink = React.useCallback(
     (href: string, event: MouseEvent) => {
       // on page hash
-      if (href[0] === "#") {
+      if (isHash(href)) {
         window.location.href = href;
         return;
       }
@@ -227,7 +228,8 @@ const StyledEditor = styled(RichMarkdownEditor)`
     visibility: hidden;
   }
 
-  .heading-name:first-child {
+  .heading-name:first-child,
+  .heading-name:first-child + .ProseMirror-yjs-cursor {
     & + h1,
     & + h2,
     & + h3,
@@ -251,6 +253,10 @@ const StyledEditor = styled(RichMarkdownEditor)`
   }
 
   .ProseMirror {
+    & > .ProseMirror-yjs-cursor {
+      display: none;
+    }
+
     .ProseMirror-yjs-cursor {
       position: relative;
       margin-left: -1px;
@@ -259,6 +265,7 @@ const StyledEditor = styled(RichMarkdownEditor)`
       border-right: 1px solid black;
       height: 1em;
       word-break: normal;
+
       &:after {
         content: "";
         display: block;
@@ -270,6 +277,7 @@ const StyledEditor = styled(RichMarkdownEditor)`
       }
       > div {
         opacity: 0;
+        transition: opacity 100ms ease-in-out;
         position: absolute;
         top: -1.8em;
         font-size: 13px;
@@ -285,13 +293,17 @@ const StyledEditor = styled(RichMarkdownEditor)`
         pointer-events: none;
         left: -1px;
       }
+
       &:hover {
         > div {
           opacity: 1;
-          transition: opacity 100ms ease-in-out;
         }
       }
     }
+  }
+
+  &.show-cursor-names .ProseMirror-yjs-cursor > div {
+    opacity: 1;
   }
 `;
 

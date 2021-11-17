@@ -2,14 +2,14 @@
 import Metrics from "../logging/metrics";
 
 export default class Tracing {
-  async onCreateDocument({
+  onLoadDocument({
     documentName,
     instance,
   }: {
     documentName: string,
     instance: any,
   }) {
-    Metrics.increment("collaboration.create_document", { documentName });
+    Metrics.increment("collaboration.load_document", { documentName });
 
     Metrics.gaugePerInstance(
       "collaboration.documents_count",
@@ -17,11 +17,11 @@ export default class Tracing {
     );
   }
 
-  async onAuthenticationFailed({ documentName }: { documentName: string }) {
+  onAuthenticationFailed({ documentName }: { documentName: string }) {
     Metrics.increment("collaboration.authentication_failed", { documentName });
   }
 
-  async onConnect({
+  onConnect({
     documentName,
     instance,
   }: {
@@ -35,7 +35,7 @@ export default class Tracing {
     );
   }
 
-  async onDisconnect({
+  onDisconnect({
     documentName,
     instance,
   }: {
@@ -50,11 +50,17 @@ export default class Tracing {
 
     Metrics.gaugePerInstance(
       "collaboration.documents_count",
-      instance.getDocumentsCount()
+      // -1 adjustment because hook is called before document is removed
+      instance.getDocumentsCount() - 1
     );
   }
 
-  async onChange({ documentName }: { documentName: string }) {
+  onChange({ documentName }: { documentName: string }) {
     Metrics.increment("collaboration.change", { documentName });
+  }
+
+  onDestroy() {
+    Metrics.gaugePerInstance("collaboration.connections_count", 0);
+    Metrics.gaugePerInstance("collaboration.documents_count", 0);
   }
 }

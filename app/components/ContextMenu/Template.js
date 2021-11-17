@@ -2,7 +2,7 @@
 import { ExpandedIcon } from "outline-icons";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   useMenuState,
   MenuButton,
@@ -15,10 +15,20 @@ import Header from "./Header";
 import MenuItem, { MenuAnchor } from "./MenuItem";
 import Separator from "./Separator";
 import ContextMenu from ".";
-import { type MenuItem as TMenuItem } from "types";
+import { actionToMenuItem } from "actions";
+import useStores from "hooks/useStores";
+import type {
+  MenuItem as TMenuItem,
+  Action,
+  ActionContext,
+  MenuSeparator,
+  MenuHeading,
+} from "types";
 
 type Props = {|
   items: TMenuItem[],
+  actions: (Action | MenuSeparator | MenuHeading)[],
+  context?: $Shape<ActionContext>,
 |};
 
 const Disclosure = styled(ExpandedIcon)`
@@ -50,7 +60,7 @@ const Submenu = React.forwardRef(({ templateItems, title, ...rest }, ref) => {
 export function filterTemplateItems(items: TMenuItem[]): TMenuItem[] {
   let filtered = items.filter((item) => item.visible !== false);
 
-  // this block literally just trims unneccessary separators
+  // this block literally just trims unnecessary separators
   filtered = filtered.reduce((acc, item, index) => {
     // trim separators from start / end
     if (item.type === "separator" && index === 0) return acc;
@@ -68,15 +78,38 @@ export function filterTemplateItems(items: TMenuItem[]): TMenuItem[] {
   return filtered;
 }
 
-function Template({ items, ...menu }: Props): React.Node {
-  const filteredTemplates = filterTemplateItems(items);
+function Template({ items, actions, context, ...menu }: Props): React.Node {
+  const { t } = useTranslation();
+  const location = useLocation();
+  const stores = useStores();
+  const { ui } = stores;
+
+  const ctx = {
+    t,
+    isCommandBar: false,
+    isContextMenu: true,
+    activeCollectionId: ui.activeCollectionId,
+    activeDocumentId: ui.activeDocumentId,
+    location,
+    stores,
+    ...context,
+  };
+
+  const filteredTemplates = filterTemplateItems(
+    actions
+      ? actions.map((action) =>
+          action.type ? action : actionToMenuItem(action, ctx)
+        )
+      : items
+  );
   const iconIsPresentInAnyMenuItem = filteredTemplates.find(
-    (item) => !!item.icon
+    (item) => !item.type && !!item.icon
   );
 
   return filteredTemplates.map((item, index) => {
-    if (iconIsPresentInAnyMenuItem)
-      item.icon = item.icon ? item.icon : <MenuIconWrapper />;
+    if (iconIsPresentInAnyMenuItem && !item.type) {
+      item.icon = item.icon || <MenuIconWrapper />;
+    }
 
     if (item.to) {
       return (

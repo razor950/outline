@@ -1,23 +1,29 @@
 // @flow
+import invariant from "invariant";
 import { observer } from "mobx-react";
 import * as React from "react";
 import { useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
-import Collection from "models/Collection";
+import { useHistory } from "react-router-dom";
 import Button from "components/Button";
 import Flex from "components/Flex";
 import HelpText from "components/HelpText";
 import IconPicker from "components/IconPicker";
 import Input from "components/Input";
 import InputSelect from "components/InputSelect";
+import useStores from "hooks/useStores";
 import useToasts from "hooks/useToasts";
 
 type Props = {
-  collection: Collection,
+  collectionId: string,
   onSubmit: () => void,
 };
 
-const CollectionEdit = ({ collection, onSubmit }: Props) => {
+const CollectionEdit = ({ collectionId, onSubmit }: Props) => {
+  const { collections } = useStores();
+  const collection = collections.get(collectionId);
+  invariant(collection, "Collection not found");
+
   const [name, setName] = useState(collection.name);
   const [icon, setIcon] = useState(collection.icon);
   const [color, setColor] = useState(collection.color || "#4E5C6E");
@@ -25,6 +31,7 @@ const CollectionEdit = ({ collection, onSubmit }: Props) => {
     field: string,
     direction: "asc" | "desc",
   }>(collection.sort);
+  const history = useHistory();
   const [isSaving, setIsSaving] = useState();
   const { showToast } = useToasts();
   const { t } = useTranslation();
@@ -41,6 +48,8 @@ const CollectionEdit = ({ collection, onSubmit }: Props) => {
           color,
           sort,
         });
+
+        history.push(collection.url);
         onSubmit();
         showToast(t("The collection was updated"), {
           type: "success",
@@ -51,11 +60,11 @@ const CollectionEdit = ({ collection, onSubmit }: Props) => {
         setIsSaving(false);
       }
     },
-    [collection, color, icon, name, onSubmit, showToast, sort, t]
+    [collection, history, color, icon, name, onSubmit, showToast, sort, t]
   );
 
-  const handleSortChange = (ev: SyntheticInputEvent<HTMLSelectElement>) => {
-    const [field, direction] = ev.target.value.split(".");
+  const handleSortChange = (value: string) => {
+    const [field, direction] = value.split(".");
 
     if (direction === "asc" || direction === "desc") {
       setSort({ field, direction });
@@ -101,6 +110,7 @@ const CollectionEdit = ({ collection, onSubmit }: Props) => {
           ]}
           value={`${sort.field}.${sort.direction}`}
           onChange={handleSortChange}
+          ariaLabel={t("Sort")}
         />
         <Button type="submit" disabled={isSaving || !collection.name}>
           {isSaving ? `${t("Saving")}…` : t("Save")}

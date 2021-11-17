@@ -37,6 +37,7 @@ import OverflowMenuButton from "components/ContextMenu/OverflowMenuButton";
 import Template from "components/ContextMenu/Template";
 import Flex from "components/Flex";
 import Modal from "components/Modal";
+import useCurrentTeam from "hooks/useCurrentTeam";
 import useStores from "hooks/useStores";
 import useToasts from "hooks/useToasts";
 import getDataTransferFiles from "utils/getDataTransferFiles";
@@ -44,7 +45,7 @@ import {
   documentHistoryUrl,
   documentUrl,
   editDocumentUrl,
-  newDocumentUrl,
+  newDocumentPath,
 } from "utils/routeHelpers";
 
 type Props = {|
@@ -72,6 +73,7 @@ function DocumentMenu({
   onOpen,
   onClose,
 }: Props) {
+  const team = useCurrentTeam();
   const { policies, collections, documents } = useStores();
   const { showToast } = useToasts();
   const menu = useMenuState({
@@ -323,12 +325,12 @@ function DocumentMenu({
             {
               title: t("Edit"),
               to: editDocumentUrl(document),
-              visible: !!can.update,
+              visible: !!can.update && !team.collaborativeEditing,
               icon: <EditIcon />,
             },
             {
               title: t("New nested document"),
-              to: newDocumentUrl(document.collectionId, {
+              to: newDocumentPath(document.collectionId, {
                 parentDocumentId: document.id,
               }),
               visible: !!can.createChildDocument,
@@ -385,13 +387,19 @@ function DocumentMenu({
             {
               title: t("Enable embeds"),
               onClick: document.enableEmbeds,
-              visible: !!showToggleEmbeds && document.embedsDisabled,
+              visible:
+                !!showToggleEmbeds &&
+                document.embedsDisabled &&
+                !team.collaborativeEditing,
               icon: <BuildingBlocksIcon />,
             },
             {
               title: t("Disable embeds"),
               onClick: document.disableEmbeds,
-              visible: !!showToggleEmbeds && !document.embedsDisabled,
+              visible:
+                !!showToggleEmbeds &&
+                !document.embedsDisabled &&
+                !team.collaborativeEditing,
               icon: <BuildingBlocksIcon />,
             },
             {
@@ -471,7 +479,7 @@ function DocumentMenu({
               isOpen={showTemplateModal}
             >
               <DocumentTemplatize
-                document={document}
+                documentId={document.id}
                 onSubmit={() => setShowTemplateModal(false)}
               />
             </Modal>

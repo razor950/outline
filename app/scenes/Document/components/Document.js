@@ -6,7 +6,6 @@ import { InputIcon } from "outline-icons";
 import { AllSelection } from "prosemirror-state";
 import * as React from "react";
 import { type TFunction, Trans, withTranslation } from "react-i18next";
-import keydown from "react-keydown";
 import { Prompt, Route, withRouter } from "react-router-dom";
 import type { RouterHistory, Match } from "react-router-dom";
 import styled from "styled-components";
@@ -27,6 +26,7 @@ import Modal from "components/Modal";
 import Notice from "components/Notice";
 import PageTitle from "components/PageTitle";
 import PlaceholderDocument from "components/PlaceholderDocument";
+import RegisterKeyDown from "components/RegisterKeyDown";
 import Time from "components/Time";
 import Container from "./Container";
 import Contents from "./Contents";
@@ -37,9 +37,10 @@ import MarkAsViewed from "./MarkAsViewed";
 import PublicReferences from "./PublicReferences";
 import References from "./References";
 import { type LocationWithState, type NavigationNode, type Theme } from "types";
+import { client } from "utils/ApiClient";
 import { isCustomDomain } from "utils/domains";
 import { emojiToUrl } from "utils/emoji";
-import { meta } from "utils/keyboard";
+import { isModKey } from "utils/keyboard";
 import {
   documentMoveUrl,
   documentHistoryUrl,
@@ -125,7 +126,7 @@ class DocumentScene extends React.Component<Props> {
     }
   }
 
-  onSelectTemplate = (template: Document) => {
+  replaceDocument = (template: Document | Revision) => {
     this.title = template.title;
     this.isDirty = true;
 
@@ -141,15 +142,37 @@ class DocumentScene extends React.Component<Props> {
         .replaceSelectionWith(parser.parse(template.text))
     );
 
-    this.props.document.templateId = template.id;
+    if (template instanceof Document) {
+      this.props.document.templateId = template.id;
+    }
     this.props.document.title = template.title;
     this.props.document.text = template.text;
 
     this.updateIsDirty();
   };
 
-  @keydown("m")
-  goToMove(ev) {
+  onSynced = async () => {
+    const { toasts, history, location, t } = this.props;
+    const restore = location.state?.restore;
+    const revisionId = location.state?.revisionId;
+
+    const editorRef = this.editor.current;
+    if (!editorRef || !restore) {
+      return;
+    }
+
+    const response = await client.post("/revisions.info", {
+      id: revisionId,
+    });
+
+    if (response) {
+      this.replaceDocument(response.data);
+      toasts.showToast(t("Document restored"));
+      history.replace(this.props.document.url);
+    }
+  };
+
+  goToMove = (ev) => {
     if (!this.props.readOnly) return;
 
     ev.preventDefault();
@@ -158,10 +181,9 @@ class DocumentScene extends React.Component<Props> {
     if (abilities.move) {
       this.props.history.push(documentMoveUrl(document));
     }
-  }
+  };
 
-  @keydown("e")
-  goToEdit(ev) {
+  goToEdit = (ev) => {
     if (!this.props.readOnly) return;
 
     ev.preventDefault();
@@ -170,40 +192,37 @@ class DocumentScene extends React.Component<Props> {
     if (abilities.update) {
       this.props.history.push(editDocumentUrl(document));
     }
-  }
+  };
 
-  @keydown("esc")
-  goBack(ev) {
+  goBack = (ev) => {
     if (this.props.readOnly) return;
 
     ev.preventDefault();
     this.props.history.goBack();
-  }
+  };
 
-  @keydown("h")
-  goToHistory(ev) {
+  goToHistory = (ev) => {
     if (!this.props.readOnly) return;
+    if (ev.ctrlKey) return;
 
     ev.preventDefault();
-    const { document, revision } = this.props;
+    const { document, location } = this.props;
 
-    if (revision) {
+    if (location.pathname.endsWith("history")) {
       this.props.history.push(document.url);
     } else {
       this.props.history.push(documentHistoryUrl(document));
     }
-  }
+  };
 
-  @keydown(`${meta}+shift+p`)
-  onPublish(ev) {
+  onPublish = (ev) => {
     ev.preventDefault();
     const { document } = this.props;
     if (document.publishedAt) return;
     this.onSave({ publish: true, done: true });
-  }
+  };
 
-  @keydown("ctrl+alt+h")
-  onToggleTableOfContents(ev) {
+  onToggleTableOfContents = (ev) => {
     if (!this.props.readOnly) return;
 
     ev.preventDefault();
@@ -214,7 +233,7 @@ class DocumentScene extends React.Component<Props> {
     } else {
       ui.showTableOfContents();
     }
-  }
+  };
 
   onSave = async (
     options: {
@@ -338,8 +357,8 @@ class DocumentScene extends React.Component<Props> {
     }
   };
 
-  onChangeTitle = (event) => {
-    this.title = event.target.value;
+  onChangeTitle = (value) => {
+    this.title = value;
     this.updateIsDirtyDebounced();
     this.autosave();
   };
@@ -370,16 +389,38 @@ class DocumentScene extends React.Component<Props> {
     const headings = this.editor.current
       ? this.editor.current.getHeadings()
       : [];
-    const showContents = ui.tocVisible && readOnly;
+    const showContents =
+      ui.tocVisible && (readOnly || team?.collaborativeEditing);
 
     const collaborativeEditing =
       team?.collaborativeEditing &&
       !document.isArchived &&
       !document.isDeleted &&
-      !revision;
+      !revision &&
+      !isShare;
 
     return (
       <ErrorBoundary>
+        <RegisterKeyDown trigger="m" handler={this.goToMove} />
+        <RegisterKeyDown trigger="e" handler={this.goToEdit} />
+        <RegisterKeyDown trigger="Escape" handler={this.goBack} />
+        <RegisterKeyDown trigger="h" handler={this.goToHistory} />
+        <RegisterKeyDown
+          trigger="p"
+          handler={(event) => {
+            if (isModKey(event) && event.shiftKey) {
+              this.onPublish(event);
+            }
+          }}
+        />
+        <RegisterKeyDown
+          trigger="h"
+          handler={(event) => {
+            if (event.ctrlKey && event.altKey) {
+              this.onToggleTableOfContents(event);
+            }
+          }}
+        />
         <Background
           key={revision ? revision.id : document.id}
           isShare={isShare}
@@ -433,7 +474,7 @@ class DocumentScene extends React.Component<Props> {
               shareId={shareId}
               isRevision={!!revision}
               isDraft={document.isDraft}
-              isEditing={!readOnly}
+              isEditing={!readOnly && !team?.collaborativeEditing}
               isSaving={this.isSaving}
               isPublishing={this.isPublishing}
               publishingIsDisabled={
@@ -442,13 +483,14 @@ class DocumentScene extends React.Component<Props> {
               savingIsDisabled={document.isSaving || this.isEmpty}
               sharedTree={this.props.sharedTree}
               goBack={this.goBack}
-              onSelectTemplate={this.onSelectTemplate}
+              onSelectTemplate={this.replaceDocument}
               onSave={this.onSave}
               headings={headings}
             />
             <MaxWidth
               archived={document.isArchived}
               showContents={showContents}
+              isEditing={!readOnly}
               column
               auto
             >
@@ -514,6 +556,7 @@ class DocumentScene extends React.Component<Props> {
                     value={readOnly ? value : undefined}
                     defaultValue={value}
                     disableEmbeds={disableEmbeds}
+                    onSynced={this.onSynced}
                     onImageUploadStart={this.onImageUploadStart}
                     onImageUploadStop={this.onImageUploadStop}
                     onSearchLink={this.props.onSearchLink}
@@ -585,11 +628,15 @@ const ReferencesWrapper = styled("div")`
 const MaxWidth = styled(Flex)`
   ${(props) =>
     props.archived && `* { color: ${props.theme.textSecondary} !important; } `};
-  padding: 0 12px;
+
+  // Adds space to the left gutter to make room for heading annotations on mobile
+  padding: ${(props) => (props.isEditing ? "0 12px 0 32px" : "0 12px")};
+  transition: padding 100ms;
+
   max-width: 100vw;
   width: 100%;
 
-  ${breakpoint("tablet")`	
+  ${breakpoint("tablet")`
     padding: 0 24px;
     margin: 4px auto 12px;
     max-width: calc(48px + ${(props) =>

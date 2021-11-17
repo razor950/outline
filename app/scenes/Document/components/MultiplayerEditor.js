@@ -1,39 +1,44 @@
 // @flow
-import { HocuspocusProvider } from "@hocuspocus/provider";
+import { HocuspocusProvider, WebSocketStatus } from "@hocuspocus/provider";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
-import { useHistory } from "react-router";
+import { useHistory } from "react-router-dom";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import Editor, { type Props as EditorProps } from "components/Editor";
-import PlaceholderDocument from "components/PlaceholderDocument";
 import env from "env";
 import useCurrentToken from "hooks/useCurrentToken";
 import useCurrentUser from "hooks/useCurrentUser";
+import useIdle from "hooks/useIdle";
+import useIsMounted from "hooks/useIsMounted";
+import usePageVisibility from "hooks/usePageVisibility";
 import useStores from "hooks/useStores";
 import useToasts from "hooks/useToasts";
-import useUnmount from "hooks/useUnmount";
 import MultiplayerExtension from "multiplayer/MultiplayerExtension";
-import { homeUrl } from "utils/routeHelpers";
+import { homePath } from "utils/routeHelpers";
 
 type Props = {|
   ...EditorProps,
   id: string,
+  onSynced?: () => void,
 |};
 
-function MultiplayerEditor({ ...props }: Props, ref: any) {
+function MultiplayerEditor({ onSynced, ...props }: Props, ref: any) {
   const documentId = props.id;
   const history = useHistory();
   const { t } = useTranslation();
   const currentUser = useCurrentUser();
   const { presence, ui } = useStores();
   const token = useCurrentToken();
-  const [localProvider, setLocalProvider] = React.useState();
+  const [showCursorNames, setShowCursorNames] = React.useState(false);
   const [remoteProvider, setRemoteProvider] = React.useState();
   const [isLocalSynced, setLocalSynced] = React.useState(false);
   const [isRemoteSynced, setRemoteSynced] = React.useState(false);
   const [ydoc] = React.useState(() => new Y.Doc());
   const { showToast } = useToasts();
+  const isIdle = useIdle();
+  const isVisible = usePageVisibility();
+  const isMounted = useIsMounted();
 
   // Provider initialization must be within useLayoutEffect rather than useState
   // or useMemo as both of these are ran twice in React StrictMode resulting in
@@ -60,22 +65,40 @@ function MultiplayerEditor({ ...props }: Props, ref: any) {
         )
       );
 
-      history.replace(homeUrl());
+      history.replace(homePath());
     });
 
     provider.on("awarenessChange", ({ states }) => {
-      states.forEach(({ user }) => {
+      states.forEach(({ user, cursor }) => {
         if (user) {
           // could know if the user is editing here using `state.cursor` but it
           // feels distracting in the UI, once multiplayer is on for everyone we
           // can stop diffentiating
-          presence.touch(documentId, user.id, false);
+          presence.touch(documentId, user.id, !!cursor);
         }
       });
     });
 
-    localProvider.on("synced", () => setLocalSynced(true));
-    provider.on("synced", () => setRemoteSynced(true));
+    const showCursorNames = () => {
+      setShowCursorNames(true);
+      setTimeout(() => {
+        if (isMounted()) {
+          setShowCursorNames(false);
+        }
+      }, 2000);
+      provider.off("awarenessChange", showCursorNames);
+    };
+
+    provider.on("awarenessChange", showCursorNames);
+
+    localProvider.on("synced", () =>
+      // only set local storage to "synced" if it's loaded a non-empty doc
+      setLocalSynced(!!ydoc.get("default")._start)
+    );
+    provider.on("synced", () => {
+      presence.touch(documentId, currentUser.id, false);
+      setRemoteSynced(true);
+    });
 
     if (debug) {
       provider.on("status", (ev) => console.log("status", ev.status));
@@ -89,8 +112,26 @@ function MultiplayerEditor({ ...props }: Props, ref: any) {
     provider.on("status", (ev) => ui.setMultiplayerStatus(ev.status));
 
     setRemoteProvider(provider);
-    setLocalProvider(localProvider);
-  }, [history, showToast, t, documentId, ui, presence, token, ydoc]);
+
+    return () => {
+      provider?.destroy();
+      localProvider?.destroy();
+
+      setRemoteProvider(null);
+
+      ui.setMultiplayerStatus(undefined);
+    };
+  }, [
+    history,
+    showToast,
+    t,
+    documentId,
+    ui,
+    presence,
+    token,
+    ydoc,
+    currentUser.id,
+  ]);
 
   const user = React.useMemo(() => {
     return {
@@ -114,18 +155,35 @@ function MultiplayerEditor({ ...props }: Props, ref: any) {
     ];
   }, [remoteProvider, user, ydoc]);
 
-  useUnmount(() => {
-    remoteProvider?.destroy();
-    localProvider?.destroy();
-    ui.setMultiplayerStatus(undefined);
-  });
+  React.useEffect(() => {
+    if (isLocalSynced && isRemoteSynced) {
+      onSynced?.();
+    }
+  }, [onSynced, isLocalSynced, isRemoteSynced]);
+
+  // Disconnect the realtime connection while idle. `isIdle` also checks for
+  // page visibility and will immediately disconnect when a tab is hidden.
+  React.useEffect(() => {
+    if (!remoteProvider) {
+      return;
+    }
+    if (
+      isIdle &&
+      !isVisible &&
+      remoteProvider.status === WebSocketStatus.Connected
+    ) {
+      remoteProvider.disconnect();
+    }
+    if (
+      (!isIdle || isVisible) &&
+      remoteProvider.status === WebSocketStatus.Disconnected
+    ) {
+      remoteProvider.connect();
+    }
+  }, [remoteProvider, isIdle, isVisible]);
 
   if (!extensions.length) {
     return null;
-  }
-
-  if (isLocalSynced && !isRemoteSynced && !ydoc.get("default")._start) {
-    return <PlaceholderDocument includeTitle={false} delay={500} />;
   }
 
   // while the collaborative document is loading, we render a version of the
@@ -144,6 +202,7 @@ function MultiplayerEditor({ ...props }: Props, ref: any) {
         extensions={extensions}
         ref={showCache ? undefined : ref}
         style={showCache ? { display: "none" } : undefined}
+        className={showCursorNames ? "show-cursor-names" : undefined}
       />
     </>
   );

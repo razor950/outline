@@ -1,35 +1,32 @@
 // @flow
 import { transparentize } from "polished";
 import * as React from "react";
-import { withRouter, type RouterHistory, type Match } from "react-router-dom";
-import styled, { withTheme } from "styled-components";
+import styled, { useTheme } from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 import EventBoundary from "components/EventBoundary";
-import NavLink from "./NavLink";
-import { type Theme } from "types";
+import NavLink, { type Props as NavLinkProps } from "./NavLink";
 
 type Props = {|
+  ...NavLinkProps,
   to?: string | Object,
   href?: string | Object,
   innerRef?: (?HTMLElement) => void,
-  onClick?: (SyntheticEvent<>) => void,
+  onClick?: (SyntheticEvent<>) => mixed,
   onMouseEnter?: (SyntheticEvent<>) => void,
-  className?: string,
   children?: React.Node,
   icon?: React.Node,
   label?: React.Node,
   menu?: React.Node,
   showActions?: boolean,
-  iconColor?: string,
   active?: boolean,
   isActiveDrop?: boolean,
-  history: RouterHistory,
-  match: Match,
-  theme: Theme,
-  exact?: boolean,
   depth?: number,
   scrollIntoViewIfNeeded?: boolean,
 |};
+
+const activeDropStyle = {
+  fontWeight: 600,
+};
 
 function SidebarLink(
   {
@@ -43,34 +40,32 @@ function SidebarLink(
     isActiveDrop,
     menu,
     showActions,
-    theme,
     exact,
     href,
     depth,
-    history,
-    match,
     className,
     scrollIntoViewIfNeeded,
     ...rest
   }: Props,
   ref
 ) {
-  const style = React.useMemo(() => {
-    return {
+  const theme = useTheme();
+  const style = React.useMemo(
+    () => ({
       paddingLeft: `${(depth || 0) * 16 + 12}px`,
-    };
-  }, [depth]);
+    }),
+    [depth]
+  );
 
-  const activeStyle = {
-    fontWeight: 600,
-    color: theme.text,
-    background: theme.sidebarItemBackground,
-    ...style,
-  };
-
-  const activeDropStyle = {
-    fontWeight: 600,
-  };
+  const activeStyle = React.useMemo(
+    () => ({
+      fontWeight: 600,
+      color: theme.text,
+      background: theme.sidebarItemBackground,
+      ...style,
+    }),
+    [theme, style]
+  );
 
   return (
     <>
@@ -187,4 +182,4 @@ const Label = styled.div`
   }
 `;
 
-export default withRouter(withTheme(React.forwardRef(SidebarLink)));
+export default React.forwardRef<Props, HTMLAnchorElement>(SidebarLink);

@@ -26,7 +26,7 @@ Outline requires the following dependencies:
 - [Postgres](https://www.postgresql.org/download/) >=9.5
 - [Redis](https://redis.io/) >= 4
 - AWS S3 bucket or compatible API for file storage
-- Slack or Google developer application for authentication
+- Slack, Google, Azure, or OIDC application for authentication
 
 ## Self-Hosted Production
 
@@ -97,9 +97,16 @@ For contributing features and fixes you can quickly get an environment running u
    1. `SLACK_SECRET` (this is called "Client Secret" in Slack admin)
 1. Configure your Slack app's Oauth & Permissions settings
    1. Slack recently prevented the use of `http` protocol for localhost. For local development, you can use a tool like [ngrok](https://ngrok.com) or a package like `mkcert`. ([How to use HTTPS for local development](https://web.dev/how-to-use-local-https/))
-   1. Add `https://my_ngrok_address/auth/slack.callback` as an Oauth redirect URL
+   1. Add `https://my_ngrok_address/auth/slack.callback` as an Oauth redirect URL and update the `URL` env var to match
    1. Ensure that the bot token scope contains at least `users:read`
 1. Run `make up`. This will download dependencies, build and launch a development version of Outline
+
+### Testing
+
+The `Makefile` has other useful scripts, including some test automation.
+
+1. To run the entire test suite, run `make test`
+1. During development, it's often useful, to re-run some tests every time a file is changed. Use `make watch` to start the test daemon and follow the instructions in the console
 
 # Contributing
 

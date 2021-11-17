@@ -4,7 +4,7 @@ import { observer } from "mobx-react";
 import * as React from "react";
 import { useDrop, useDrag } from "react-dnd";
 import { useTranslation } from "react-i18next";
-import { useLocation } from "react-router-dom";
+import { useLocation, useHistory } from "react-router-dom";
 import styled from "styled-components";
 import Collection from "models/Collection";
 import Document from "models/Document";
@@ -40,6 +40,7 @@ function CollectionLink({
   isDraggingAnyCollection,
   onChangeDragging,
 }: Props) {
+  const history = useHistory();
   const { t } = useTranslation();
   const { search } = useLocation();
   const [menuOpen, handleMenuOpen, handleMenuClose] = useBoolean();
@@ -53,8 +54,9 @@ function CollectionLink({
   const handleTitleChange = React.useCallback(
     async (name: string) => {
       await collection.save({ name });
+      history.push(collection.url);
     },
-    [collection]
+    [collection, history]
   );
 
   const { ui, documents, policies, collections } = useStores();
@@ -177,8 +179,6 @@ function CollectionLink({
               icon={
                 <CollectionIcon collection={collection} expanded={expanded} />
               }
-              iconColor={collection.color}
-              expanded={expanded}
               showActions={menuOpen || expanded}
               isActiveDrop={isOver && canDrop}
               label={

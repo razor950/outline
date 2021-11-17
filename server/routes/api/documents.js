@@ -1038,13 +1038,17 @@ router.post("documents.update", auth(), async (ctx) => {
   if (editorVersion) document.editorVersion = editorVersion;
   if (templateId) document.templateId = templateId;
 
-  if (append) {
-    document.text += text;
-  } else if (text !== undefined) {
-    document.text = text;
+  if (!user.team?.collaborativeEditing) {
+    if (append) {
+      document.text += text;
+    } else if (text !== undefined) {
+      document.text = text;
+    }
   }
+
   document.lastModifiedById = user.id;
   const { collection } = document;
+  const changed = document.changed();
 
   let transaction;
   try {
@@ -1073,7 +1077,7 @@ router.post("documents.update", auth(), async (ctx) => {
       data: { title: document.title },
       ip: ctx.request.ip,
     });
-  } else {
+  } else if (changed) {
     await Event.create({
       name: "documents.update",
       documentId: document.id,

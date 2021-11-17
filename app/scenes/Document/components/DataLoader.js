@@ -24,6 +24,7 @@ import { type LocationWithState, type NavigationNode } from "types";
 import { NotFoundError, OfflineError } from "utils/errors";
 import { matchDocumentEdit, updateDocumentUrl } from "utils/routeHelpers";
 import { isInternalUrl } from "utils/urls";
+
 type Props = {|
   match: Match,
   auth: AuthStore,
@@ -45,6 +46,7 @@ class DataLoader extends React.Component<Props> {
   sharedTree: ?NavigationNode;
   @observable document: ?Document;
   @observable revision: ?Revision;
+  @observable shapshot: ?Blob;
   @observable error: ?Error;
 
   componentDidMount() {
@@ -86,7 +88,10 @@ class DataLoader extends React.Component<Props> {
   }
 
   get isEditing() {
-    return this.props.match.path === matchDocumentEdit;
+    return (
+      this.props.match.path === matchDocumentEdit ||
+      this.props.auth?.team?.collaborativeEditing
+    );
   }
 
   onSearchLink = async (term: string) => {
@@ -223,7 +228,8 @@ class DataLoader extends React.Component<Props> {
   };
 
   render() {
-    const { location, policies, auth, ui } = this.props;
+    const { location, policies, auth, match, ui } = this.props;
+    const { revisionId } = match.params;
 
     if (this.error) {
       return this.error instanceof OfflineError ? (
@@ -237,11 +243,13 @@ class DataLoader extends React.Component<Props> {
     const document = this.document;
     const revision = this.revision;
 
-    if (!document || !team) {
+    if (!document || !team || (revisionId && !revision)) {
       return (
         <>
           <Loading location={location} />
-          {this.isEditing && <HideSidebar ui={ui} />}
+          {this.isEditing && !team?.collaborativeEditing && (
+            <HideSidebar ui={ui} />
+          )}
         </>
       );
     }
@@ -258,7 +266,9 @@ class DataLoader extends React.Component<Props> {
 
     return (
       <React.Fragment key={key}>
-        {this.isEditing && <HideSidebar ui={ui} />}
+        {this.isEditing && !team.collaborativeEditing && (
+          <HideSidebar ui={ui} />
+        )}
         {this.props.children({
           document,
           revision,

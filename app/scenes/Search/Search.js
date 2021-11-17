@@ -1,13 +1,12 @@
 // @flow
 import ArrowKeyNavigation from "boundless-arrow-key-navigation";
-import { debounce, isEqual } from "lodash";
+import { isEqual } from "lodash";
 import { observable, action } from "mobx";
 import { observer, inject } from "mobx-react";
 import { PlusIcon } from "outline-icons";
 import queryString from "query-string";
 import * as React from "react";
 import { withTranslation, Trans, type TFunction } from "react-i18next";
-import keydown from "react-keydown";
 import { withRouter, Link } from "react-router-dom";
 import type { RouterHistory, Match } from "react-router-dom";
 import { Waypoint } from "react-waypoint";
@@ -29,15 +28,15 @@ import Flex from "components/Flex";
 import HelpText from "components/HelpText";
 import LoadingIndicator from "components/LoadingIndicator";
 import PageTitle from "components/PageTitle";
+import RegisterKeyDown from "components/RegisterKeyDown";
 import CollectionFilter from "./components/CollectionFilter";
 import DateFilter from "./components/DateFilter";
-import SearchField from "./components/SearchField";
+import SearchInput from "./components/SearchInput";
 import StatusFilter from "./components/StatusFilter";
 import UserFilter from "./components/UserFilter";
 import NewDocumentMenu from "menus/NewDocumentMenu";
 import { type LocationWithState } from "types";
-import { metaDisplay } from "utils/keyboard";
-import { newDocumentUrl, searchUrl } from "utils/routeHelpers";
+import { newDocumentPath, searchUrl } from "utils/routeHelpers";
 import { decodeURIComponentSafe } from "utils/urls";
 
 type Props = {
@@ -83,13 +82,13 @@ class Search extends React.Component<Props> {
     }
   }
 
-  @keydown("esc")
-  goBack() {
+  goBack = () => {
     this.props.history.goBack();
-  }
+  };
 
-  handleKeyDown = (ev: SyntheticKeyboardEvent<>) => {
+  handleKeyDown = (ev: SyntheticKeyboardEvent<HTMLInputElement>) => {
     if (ev.key === "Enter") {
+      this.updateLocation(ev.currentTarget.value);
       this.fetchResults();
       return;
     }
@@ -117,7 +116,7 @@ class Search extends React.Component<Props> {
     // To prevent "no results" showing before debounce kicks in
     this.isLoading = true;
 
-    this.fetchResultsDebounced();
+    this.fetchResults();
   };
 
   handleTermChange = () => {
@@ -127,9 +126,9 @@ class Search extends React.Component<Props> {
     this.allowLoadMore = true;
 
     // To prevent "no results" showing before debounce kicks in
-    this.isLoading = !!this.query;
+    this.isLoading = true;
 
-    this.fetchResultsDebounced();
+    this.fetchResults();
   };
 
   handleFilterChange = (search: {
@@ -152,7 +151,7 @@ class Search extends React.Component<Props> {
 
   handleNewDoc = () => {
     if (this.collectionId) {
-      this.props.history.push(newDocumentUrl(this.collectionId));
+      this.props.history.push(newDocumentPath(this.collectionId));
     }
   };
 
@@ -241,14 +240,10 @@ class Search extends React.Component<Props> {
       }
     } else {
       this.pinToTop = false;
+      this.isLoading = false;
       this.lastQuery = this.query;
     }
   };
-
-  fetchResultsDebounced = debounce(this.fetchResults, 500, {
-    leading: false,
-    trailing: true,
-  });
 
   updateLocation = (query: string) => {
     this.props.history.replace({
@@ -273,6 +268,7 @@ class Search extends React.Component<Props> {
     return (
       <Container auto>
         <PageTitle title={this.title} />
+        <RegisterKeyDown trigger="Escape" handler={this.goBack} />
         {this.isLoading && <LoadingIndicator />}
         {notFound && (
           <div>
@@ -283,18 +279,17 @@ class Search extends React.Component<Props> {
           </div>
         )}
         <ResultsWrapper pinToTop={this.pinToTop} column auto>
-          <SearchField
+          <SearchInput
             placeholder={`${t("Search")}…`}
             onKeyDown={this.handleKeyDown}
-            onChange={this.updateLocation}
             defaultValue={this.query}
           />
           {showShortcutTip && (
             <Fade>
               <HelpText small>
                 <Trans
-                  defaults="Use the <em>{{ meta }}+K</em> shortcut to search from anywhere in your knowledge base"
-                  values={{ meta: metaDisplay }}
+                  defaults="Use the <em>{{ shortcut }}</em> shortcut to search from anywhere in your knowledge base"
+                  values={{ shortcut: "/" }}
                   components={{ em: <strong /> }}
                 />
               </HelpText>

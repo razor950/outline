@@ -1,5 +1,6 @@
 // @flow
 import { addMinutes, subMinutes } from "date-fns";
+import fetch from "fetch-with-proxy";
 import { type Request } from "koa";
 import { OAuthStateMismatchError } from "../errors";
 import { getCookieDomain } from "./domains";
@@ -8,7 +9,8 @@ export class StateStore {
   key: string = "state";
 
   store = (req: Request, callback: (err: ?Error, state?: string) => void) => {
-    const state = Math.random().toString(36).substring(7);
+    // Produce an 8-character random string as state
+    const state = Math.random().toString(36).slice(-8);
 
     // $FlowFixMe
     req.cookies.set(this.key, state, {
@@ -46,4 +48,16 @@ export class StateStore {
 
     callback(null, true);
   };
+}
+
+export async function request(endpoint: string, accessToken: string) {
+  const response = await fetch(endpoint, {
+    method: "GET",
+    credentials: "same-origin",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+  });
+  return response.json();
 }

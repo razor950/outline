@@ -25,7 +25,7 @@ const ListItem = (
     <>
       {image && <Image>{image}</Image>}
       <Content
-        align={compact ? "center" : undefined}
+        justify={compact ? "center" : undefined}
         column={!compact}
         $selected={selected}
       >
@@ -36,7 +36,11 @@ const ListItem = (
           </Subtitle>
         )}
       </Content>
-      {actions && <Actions $selected={selected}>{actions}</Actions>}
+      {actions && (
+        <Actions $selected={selected} gap={4}>
+          {actions}
+        </Actions>
+      )}
     </>
   );
 
@@ -56,7 +60,6 @@ const ListItem = (
 
 const Wrapper = styled.div`
   display: flex;
-  user-select: none;
   padding: ${(props) => (props.$border === false ? 0 : "8px 0")};
   margin: ${(props) => (props.$border === false ? "8px 0" : 0)};
   border-bottom: 1px solid
@@ -87,8 +90,7 @@ const Heading = styled.p`
   margin: 0;
 `;
 
-const Content = styled.div`
-  display: flex;
+const Content = styled(Flex)`
   flex-direction: column;
   flex-grow: 1;
   color: ${(props) => (props.$selected ? props.theme.white : props.theme.text)};
@@ -105,7 +107,6 @@ const Subtitle = styled.p`
 export const Actions = styled(Flex)`
   align-self: center;
   justify-content: center;
-  margin-right: 4px;
   color: ${(props) =>
     props.$selected ? props.theme.white : props.theme.textSecondary};
 `;

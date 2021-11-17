@@ -4,12 +4,10 @@ import { observer, inject } from "mobx-react";
 import { MenuIcon } from "outline-icons";
 import * as React from "react";
 import { Helmet } from "react-helmet";
-import { withTranslation, type TFunction } from "react-i18next";
-import keydown from "react-keydown";
+import { withTranslation } from "react-i18next";
 import {
   Switch,
   Route,
-  Redirect,
   withRouter,
   type RouterHistory,
 } from "react-router-dom";
@@ -20,26 +18,32 @@ import DocumentsStore from "stores/DocumentsStore";
 import PoliciesStore from "stores/PoliciesStore";
 import UiStore from "stores/UiStore";
 import ErrorSuspended from "scenes/ErrorSuspended";
-import KeyboardShortcuts from "scenes/KeyboardShortcuts";
 import Button from "components/Button";
 import Flex from "components/Flex";
-import Guide from "components/Guide";
 import { LoadingIndicatorBar } from "components/LoadingIndicator";
+import RegisterKeyDown from "components/RegisterKeyDown";
 import Sidebar from "components/Sidebar";
 import SettingsSidebar from "components/Sidebar/Settings";
 import SkipNavContent from "components/SkipNavContent";
 import SkipNavLink from "components/SkipNavLink";
-import { meta } from "utils/keyboard";
+import { isModKey } from "utils/keyboard";
 import {
-  homeUrl,
   searchUrl,
   matchDocumentSlug as slug,
-  newDocumentUrl,
+  newDocumentPath,
+  settingsPath,
 } from "utils/routeHelpers";
 
 const DocumentHistory = React.lazy(() =>
   import(
     /* webpackChunkName: "document-history" */ "components/DocumentHistory"
+  )
+);
+
+const CommandBar = React.lazy(() =>
+  import(
+    /* webpackChunkName: "command-bar" */
+    "components/CommandBar"
   )
 );
 
@@ -53,70 +57,50 @@ type Props = {
   history: RouterHistory,
   policies: PoliciesStore,
   notifications?: React.Node,
-  i18n: Object,
-  t: TFunction,
 };
 
 @observer
 class Layout extends React.Component<Props> {
   scrollable: ?HTMLDivElement;
-  @observable redirectTo: ?string;
   @observable keyboardShortcutsOpen: boolean = false;
 
-  componentDidUpdate() {
-    if (this.redirectTo) {
-      this.redirectTo = undefined;
-    }
-  }
-
-  @keydown(`${meta}+.`)
-  handleToggleSidebar() {
-    this.props.ui.toggleCollapsedSidebar();
-  }
-
-  @keydown("shift+/")
-  handleOpenKeyboardShortcuts() {
-    this.keyboardShortcutsOpen = true;
-  }
-
-  handleCloseKeyboardShortcuts = () => {
-    this.keyboardShortcutsOpen = false;
-  };
-
-  @keydown(["t", "/", `${meta}+k`])
-  goToSearch(ev: SyntheticEvent<>) {
+  goToSearch = (ev: KeyboardEvent) => {
     ev.preventDefault();
     ev.stopPropagation();
-    this.redirectTo = searchUrl();
-  }
+    this.props.history.push(searchUrl());
+  };
 
-  @keydown("d")
-  goToDashboard() {
-    this.redirectTo = homeUrl();
-  }
-
-  @keydown("n")
-  goToNewDocument() {
+  goToNewDocument = () => {
     const { activeCollectionId } = this.props.ui;
     if (!activeCollectionId) return;
 
     const can = this.props.policies.abilities(activeCollectionId);
     if (!can.update) return;
 
-    this.props.history.push(newDocumentUrl(activeCollectionId));
-  }
+    this.props.history.push(newDocumentPath(activeCollectionId));
+  };
 
   render() {
-    const { auth, t, ui } = this.props;
+    const { auth, ui } = this.props;
     const { user, team } = auth;
     const showSidebar = auth.authenticated && user && team;
     const sidebarCollapsed = ui.isEditing || ui.sidebarCollapsed;
 
     if (auth.isSuspended) return <ErrorSuspended />;
-    if (this.redirectTo) return <Redirect to={this.redirectTo} push />;
 
     return (
       <Container column auto>
+        <RegisterKeyDown trigger="n" handler={this.goToNewDocument} />
+        <RegisterKeyDown trigger="t" handler={this.goToSearch} />
+        <RegisterKeyDown trigger="/" handler={this.goToSearch} />
+        <RegisterKeyDown
+          trigger="."
+          handler={(event) => {
+            if (isModKey(event)) {
+              ui.toggleCollapsedSidebar();
+            }
+          }}
+        />
         <Helmet>
           <title>{team && team.name ? team.name : "Outline"}</title>
           <meta
@@ -139,7 +123,7 @@ class Layout extends React.Component<Props> {
         <Container auto>
           {showSidebar && (
             <Switch>
-              <Route path="/settings" component={SettingsSidebar} />
+              <Route path={settingsPath()} component={SettingsSidebar} />
               <Route component={Sidebar} />
             </Switch>
           )}
@@ -159,7 +143,7 @@ class Layout extends React.Component<Props> {
             {this.props.children}
           </Content>
 
-          <React.Suspense>
+          <React.Suspense fallback={null}>
             <Switch>
               <Route
                 path={`/doc/${slug}/history/:revisionId?`}
@@ -168,13 +152,7 @@ class Layout extends React.Component<Props> {
             </Switch>
           </React.Suspense>
         </Container>
-        <Guide
-          isOpen={this.keyboardShortcutsOpen}
-          onRequestClose={this.handleCloseKeyboardShortcuts}
-          title={t("Keyboard shortcuts")}
-        >
-          <KeyboardShortcuts />
-        </Guide>
+        <CommandBar />
       </Container>
     );
   }
