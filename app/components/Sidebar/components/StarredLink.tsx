@@ -1,18 +1,22 @@
+import fractionalIndex from "fractional-index";
 import { observer } from "mobx-react";
+import { StarredIcon } from "outline-icons";
 import * as React from "react";
 import { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
-import styled from "styled-components";
-import { MAX_TITLE_LENGTH } from "@shared/constants";
+import { useDrag, useDrop } from "react-dnd";
+import styled, { useTheme } from "styled-components";
+import parseTitle from "@shared/utils/parseTitle";
+import Star from "~/models/Star";
+import EmojiIcon from "~/components/EmojiIcon";
 import Fade from "~/components/Fade";
 import useBoolean from "~/hooks/useBoolean";
 import useStores from "~/hooks/useStores";
 import DocumentMenu from "~/menus/DocumentMenu";
-import Disclosure from "./Disclosure";
-import EditableTitle from "./EditableTitle";
+import DropCursor from "./DropCursor";
 import SidebarLink from "./SidebarLink";
 
 type Props = {
+  star?: Star;
   depth: number;
   title: string;
   to: string;
@@ -20,19 +24,24 @@ type Props = {
   collectionId: string;
 };
 
-function StarredLink({ depth, title, to, documentId, collectionId }: Props) {
-  const { t } = useTranslation();
-  const { collections, documents, policies } = useStores();
+function StarredLink({
+  depth,
+  to,
+  documentId,
+  title,
+  collectionId,
+  star,
+}: Props) {
+  const theme = useTheme();
+  const { collections, documents } = useStores();
   const collection = collections.get(collectionId);
   const document = documents.get(documentId);
   const [expanded, setExpanded] = useState(false);
   const [menuOpen, handleMenuOpen, handleMenuClose] = useBoolean();
-  const canUpdate = policies.abilities(documentId).update;
   const childDocuments = collection
     ? collection.getDocumentChildren(documentId)
     : [];
   const hasChildDocuments = childDocuments.length > 0;
-  const [isEditing, setIsEditing] = React.useState(false);
 
   useEffect(() => {
     async function load() {
@@ -45,7 +54,7 @@ function StarredLink({ depth, title, to, documentId, collectionId }: Props) {
   }, [collection, collectionId, collections, document, documentId, documents]);
 
   const handleDisclosureClick = React.useCallback(
-    (ev: React.MouseEvent<SVGElement>) => {
+    (ev: React.MouseEvent<HTMLButtonElement>) => {
       ev.preventDefault();
       ev.stopPropagation();
       setExpanded((prevExpanded) => !prevExpanded);
@@ -53,57 +62,62 @@ function StarredLink({ depth, title, to, documentId, collectionId }: Props) {
     []
   );
 
-  const handleTitleChange = React.useCallback(
-    async (title: string) => {
-      if (!document) return;
-      await documents.update(
-        {
-          id: document.id,
-          text: document.text,
-          title,
-        },
-        {
-          lastRevision: document.revision,
-        }
-      );
+  // Draggable
+  const [{ isDragging }, drag] = useDrag({
+    type: "star",
+    item: () => star,
+    collect: (monitor) => ({
+      isDragging: !!monitor.isDragging(),
+    }),
+    canDrag: () => {
+      return depth === 0;
     },
-    [documents, document]
-  );
+  });
 
-  const handleTitleEditing = React.useCallback((isEditing: boolean) => {
-    setIsEditing(isEditing);
-  }, []);
+  // Drop to reorder
+  const [{ isOverReorder, isDraggingAny }, dropToReorder] = useDrop({
+    accept: "star",
+    drop: (item: Star) => {
+      const next = star?.next();
+
+      item?.save({
+        index: fractionalIndex(star?.index || null, next?.index || null),
+      });
+    },
+    collect: (monitor) => ({
+      isOverReorder: !!monitor.isOver(),
+      isDraggingAny: !!monitor.canDrop(),
+    }),
+  });
+
+  const { emoji } = parseTitle(title);
+  const label = emoji ? title.replace(emoji, "") : title;
 
   return (
     <>
-      <Relative>
+      <Draggable key={documentId} ref={drag} $isDragging={isDragging}>
         <SidebarLink
           depth={depth}
+          expanded={hasChildDocuments ? expanded : undefined}
+          onDisclosureClick={handleDisclosureClick}
           to={`${to}?starred`}
+          icon={
+            depth === 0 ? (
+              emoji ? (
+                <EmojiIcon emoji={emoji} />
+              ) : (
+                <StarredIcon color={theme.yellow} />
+              )
+            ) : undefined
+          }
           isActive={(match, location) =>
             !!match && location.search === "?starred"
           }
-          label={
-            <>
-              {hasChildDocuments && (
-                <Disclosure
-                  expanded={expanded}
-                  onClick={handleDisclosureClick}
-                />
-              )}
-              <EditableTitle
-                title={title || t("Untitled")}
-                onSubmit={handleTitleChange}
-                onEditing={handleTitleEditing}
-                canUpdate={canUpdate}
-                maxLength={MAX_TITLE_LENGTH}
-              />
-            </>
-          }
+          label={depth === 0 ? label : title}
           exact={false}
           showActions={menuOpen}
           menu={
-            document && !isEditing ? (
+            document ? (
               <Fade>
                 <DocumentMenu
                   document={document}
@@ -114,12 +128,15 @@ function StarredLink({ depth, title, to, documentId, collectionId }: Props) {
             ) : undefined
           }
         />
-      </Relative>
+        {isDraggingAny && (
+          <DropCursor isActiveDrop={isOverReorder} innerRef={dropToReorder} />
+        )}
+      </Draggable>
       {expanded &&
         childDocuments.map((childDocument) => (
           <ObserveredStarredLink
             key={childDocument.id}
-            depth={depth + 1}
+            depth={depth === 0 ? 2 : depth + 1}
             title={childDocument.title}
             to={childDocument.url}
             documentId={childDocument.id}
@@ -130,8 +147,9 @@ function StarredLink({ depth, title, to, documentId, collectionId }: Props) {
   );
 }
 
-const Relative = styled.div`
+const Draggable = styled.div<{ $isDragging?: boolean }>`
   position: relative;
+  opacity: ${(props) => (props.$isDragging ? 0.5 : 1)};
 `;
 
 const ObserveredStarredLink = observer(StarredLink);

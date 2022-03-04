@@ -1,19 +1,19 @@
 import { observer } from "mobx-react";
 import * as React from "react";
-import { useTranslation } from "react-i18next";
 import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 import { MAX_TITLE_LENGTH } from "@shared/constants";
 import { light } from "@shared/theme";
-import parseTitle from "@shared/utils/parseTitle";
 import Document from "~/models/Document";
 import ContentEditable from "~/components/ContentEditable";
 import Star, { AnimatedStar } from "~/components/Star";
-import useStores from "~/hooks/useStores";
+import useEmojiWidth from "~/hooks/useEmojiWidth";
+import usePolicy from "~/hooks/usePolicy";
 import { isModKey } from "~/utils/keyboard";
 
 type Props = {
   value: string;
+  placeholder: string;
   document: Document;
   /** Should the title be editable, policies will also be considered separately */
   readOnly?: boolean;
@@ -27,6 +27,9 @@ type Props = {
   onSave?: (options: { publish?: boolean; done?: boolean }) => void;
 };
 
+const lineHeight = "1.25";
+const fontSize = "2.25em";
+
 const EditableTitle = React.forwardRef(
   (
     {
@@ -37,16 +40,17 @@ const EditableTitle = React.forwardRef(
       onSave,
       onGoToNextInput,
       starrable,
+      placeholder,
     }: Props,
     ref: React.RefObject<HTMLSpanElement>
   ) => {
-    const { policies } = useStores();
-    const { t } = useTranslation();
-    const can = policies.abilities(document.id);
-    const { emoji } = parseTitle(value);
-    const startsWithEmojiAndSpace = !!(emoji && value.startsWith(`${emoji} `));
+    const can = usePolicy(document.id);
     const normalizedTitle =
       !value && readOnly ? document.titleWithDefault : value;
+
+    const handleClick = React.useCallback(() => {
+      ref.current?.focus();
+    }, [ref]);
 
     const handleKeyDown = React.useCallback(
       (event: React.KeyboardEvent) => {
@@ -88,17 +92,19 @@ const EditableTitle = React.forwardRef(
       [onGoToNextInput, onSave]
     );
 
+    const emojiWidth = useEmojiWidth(document.emoji, {
+      fontSize,
+      lineHeight,
+    });
+
     return (
       <Title
+        onClick={handleClick}
         onChange={onChange}
         onKeyDown={handleKeyDown}
-        placeholder={
-          document.isTemplate
-            ? t("Start your template…")
-            : t("Start with a title…")
-        }
+        placeholder={placeholder}
         value={normalizedTitle}
-        $startsWithEmojiAndSpace={startsWithEmojiAndSpace}
+        $emojiWidth={emojiWidth}
         $isStarred={document.isStarred}
         autoFocus={!value}
         maxLength={MAX_TITLE_LENGTH}
@@ -117,28 +123,29 @@ const EditableTitle = React.forwardRef(
 const StarButton = styled(Star)`
   position: relative;
   top: 4px;
-  left: 4px;
+  left: 10px;
+  overflow: hidden;
+  width: 24px;
+
+  svg {
+    position: relative;
+    left: -4px;
+  }
 `;
 
 type TitleProps = {
-  $startsWithEmojiAndSpace: boolean;
   $isStarred: boolean;
+  $emojiWidth: number;
 };
 
 const Title = styled(ContentEditable)<TitleProps>`
-  line-height: 1.25;
+  line-height: ${lineHeight};
   margin-top: 1em;
   margin-bottom: 0.5em;
-  background: ${(props) => props.theme.background};
-  transition: ${(props) => props.theme.backgroundTransition};
-  color: ${(props) => props.theme.text};
-  -webkit-text-fill-color: ${(props) => props.theme.text};
-  font-size: 2.25em;
+  font-size: ${fontSize};
   font-weight: 500;
-  outline: none;
   border: 0;
   padding: 0;
-  resize: none;
 
   > span {
     outline: none;
@@ -150,8 +157,7 @@ const Title = styled(ContentEditable)<TitleProps>`
   }
 
   ${breakpoint("tablet")`
-    margin-left: ${(props: TitleProps) =>
-      props.$startsWithEmojiAndSpace ? "-1.2em" : 0};
+    margin-left: ${(props: TitleProps) => -props.$emojiWidth}px;
   `};
 
   ${AnimatedStar} {

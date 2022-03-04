@@ -5,6 +5,7 @@ import styled from "styled-components";
 type Props = Omit<React.HTMLAttributes<HTMLSpanElement>, "ref" | "onChange"> & {
   disabled?: boolean;
   readOnly?: boolean;
+  onClick?: React.MouseEventHandler<HTMLDivElement>;
   onChange?: (text: string) => void;
   onBlur?: React.FocusEventHandler<HTMLSpanElement> | undefined;
   onInput?: React.FormEventHandler<HTMLSpanElement> | undefined;
@@ -36,13 +37,14 @@ const ContentEditable = React.forwardRef(
       placeholder,
       readOnly,
       dir,
+      onClick,
       ...rest
     }: Props,
     forwardedRef: React.RefObject<HTMLSpanElement>
   ) => {
     const innerRef = React.useRef<HTMLSpanElement>(null);
     const ref = forwardedRef || innerRef;
-    const [innerHTML, setInnerHTML] = React.useState<string>(value);
+    const [innerValue, setInnerValue] = React.useState<string>(value);
     const lastValue = React.useRef("");
 
     const wrappedEvent = (
@@ -71,29 +73,41 @@ const ContentEditable = React.forwardRef(
       if (autoFocus) {
         ref.current?.focus();
       }
-    });
+    }, [autoFocus, ref]);
 
     React.useEffect(() => {
       if (value !== ref.current?.innerText) {
-        setInnerHTML(value);
+        setInnerValue(value);
       }
     }, [value, ref]);
 
+    // Ensure only plain text can be pasted into title when pasting from another
+    // rich text editor
+    const handlePaste = React.useCallback(
+      (event: React.ClipboardEvent<HTMLSpanElement>) => {
+        event.preventDefault();
+        const text = event.clipboardData.getData("text/plain");
+        window.document.execCommand("insertText", false, text);
+      },
+      []
+    );
+
     return (
-      <div className={className} dir={dir}>
+      <div className={className} dir={dir} onClick={onClick}>
         <Content
           ref={ref}
           contentEditable={!disabled && !readOnly}
           onInput={wrappedEvent(onInput)}
           onBlur={wrappedEvent(onBlur)}
           onKeyDown={wrappedEvent(onKeyDown)}
+          onPaste={handlePaste}
           data-placeholder={placeholder}
+          suppressContentEditableWarning
           role="textbox"
-          dangerouslySetInnerHTML={{
-            __html: innerHTML,
-          }}
           {...rest}
-        />
+        >
+          {innerValue}
+        </Content>
         {children}
       </div>
     );
@@ -101,6 +115,14 @@ const ContentEditable = React.forwardRef(
 );
 
 const Content = styled.span`
+  background: ${(props) => props.theme.background};
+  transition: ${(props) => props.theme.backgroundTransition};
+  color: ${(props) => props.theme.text};
+  -webkit-text-fill-color: ${(props) => props.theme.text};
+  outline: none;
+  resize: none;
+  cursor: text;
+
   &:empty {
     display: inline-block;
   }

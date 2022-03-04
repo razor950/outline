@@ -25,6 +25,7 @@ import { useMenuState, MenuButton } from "reakit/Menu";
 import { VisuallyHidden } from "reakit/VisuallyHidden";
 import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
+import getDataTransferFiles from "@shared/utils/getDataTransferFiles";
 import Document from "~/models/Document";
 import DocumentDelete from "~/scenes/DocumentDelete";
 import DocumentMove from "~/scenes/DocumentMove";
@@ -37,18 +38,15 @@ import Separator from "~/components/ContextMenu/Separator";
 import Template from "~/components/ContextMenu/Template";
 import Flex from "~/components/Flex";
 import Modal from "~/components/Modal";
-import Toggle from "~/components/Toggle";
+import Switch from "~/components/Switch";
 import { actionToMenuItem } from "~/actions";
-import {
-  pinDocument,
-  pinDocumentToHome,
-} from "~/actions/definitions/documents";
+import { pinDocument } from "~/actions/definitions/documents";
 import useActionContext from "~/hooks/useActionContext";
 import useCurrentTeam from "~/hooks/useCurrentTeam";
+import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
 import useToasts from "~/hooks/useToasts";
 import { MenuItem } from "~/types";
-import getDataTransferFiles from "~/utils/getDataTransferFiles";
 import {
   documentHistoryUrl,
   documentUrl,
@@ -177,7 +175,7 @@ function DocumentMenu({
   );
 
   const collection = collections.get(document.collectionId);
-  const can = policies.abilities(document.id);
+  const can = usePolicy(document.id);
   const canViewHistory = can.read && !can.restore;
   const restoreItems = React.useMemo(
     () => [
@@ -328,7 +326,6 @@ function DocumentMenu({
               visible: !document.isStarred && !!can.star,
               icon: <StarredIcon />,
             },
-            actionToMenuItem(pinDocumentToHome, context),
             actionToMenuItem(pinDocument, context),
             {
               type: "separator",
@@ -387,20 +384,6 @@ function DocumentMenu({
             },
             {
               type: "button",
-              title: `${t("Delete")}…`,
-              onClick: () => setShowDeleteModal(true),
-              visible: !!can.delete,
-              icon: <TrashIcon />,
-            },
-            {
-              type: "button",
-              title: `${t("Permanently delete")}…`,
-              onClick: () => setShowPermanentDeleteModal(true),
-              visible: can.permanentDelete,
-              icon: <CrossIcon />,
-            },
-            {
-              type: "button",
               title: `${t("Move")}…`,
               onClick: () => setShowMoveModal(true),
               visible: !!can.move,
@@ -408,22 +391,32 @@ function DocumentMenu({
             },
             {
               type: "button",
+              title: `${t("Delete")}…`,
+              dangerous: true,
+              onClick: () => setShowDeleteModal(true),
+              visible: !!can.delete,
+              icon: <TrashIcon />,
+            },
+            {
+              type: "button",
+              title: `${t("Permanently delete")}…`,
+              dangerous: true,
+              onClick: () => setShowPermanentDeleteModal(true),
+              visible: can.permanentDelete,
+              icon: <CrossIcon />,
+            },
+            {
+              type: "button",
               title: t("Enable embeds"),
               onClick: document.enableEmbeds,
-              visible:
-                !!showToggleEmbeds &&
-                document.embedsDisabled &&
-                !team.collaborativeEditing,
+              visible: !!showToggleEmbeds && document.embedsDisabled,
               icon: <BuildingBlocksIcon />,
             },
             {
               type: "button",
               title: t("Disable embeds"),
               onClick: document.disableEmbeds,
-              visible:
-                !!showToggleEmbeds &&
-                !document.embedsDisabled &&
-                !team.collaborativeEditing,
+              visible: !!showToggleEmbeds && !document.embedsDisabled,
               icon: <BuildingBlocksIcon />,
             },
             {
@@ -459,10 +452,12 @@ function DocumentMenu({
             <Separator />
             <Style>
               <ToggleMenuItem
+                width={26}
+                height={14}
                 label={t("Full width")}
                 checked={document.fullWidth}
                 onChange={(ev) => {
-                  document.fullWidth = ev.target.checked;
+                  document.fullWidth = ev.currentTarget.checked;
                   document.save();
                 }}
               />
@@ -532,8 +527,8 @@ function DocumentMenu({
   );
 }
 
-const ToggleMenuItem = styled(Toggle)`
-  span {
+const ToggleMenuItem = styled(Switch)`
+  * {
     font-weight: normal;
     color: ${(props) => props.theme.textSecondary};
   }

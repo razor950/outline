@@ -10,11 +10,12 @@ import Share from "~/models/Share";
 import Button from "~/components/Button";
 import CopyToClipboard from "~/components/CopyToClipboard";
 import Flex from "~/components/Flex";
-import HelpText from "~/components/HelpText";
 import Input from "~/components/Input";
 import Notice from "~/components/Notice";
 import Switch from "~/components/Switch";
+import Text from "~/components/Text";
 import useKeyDown from "~/hooks/useKeyDown";
+import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
 import useToasts from "~/hooks/useToasts";
 
@@ -34,19 +35,21 @@ function SharePopover({
   visible,
 }: Props) {
   const { t } = useTranslation();
-  const { policies, shares, auth } = useStores();
+  const { shares, auth } = useStores();
   const { showToast } = useToasts();
   const [isCopied, setIsCopied] = React.useState(false);
   const timeout = React.useRef<ReturnType<typeof setTimeout>>();
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const can = policies.abilities(share ? share.id : "");
-  const documentAbilities = policies.abilities(document.id);
+  const can = usePolicy(share ? share.id : "");
+  const documentAbilities = usePolicy(document.id);
   const canPublish =
     can.update &&
     !document.isTemplate &&
     auth.team?.sharing &&
     documentAbilities.share;
-  const isPubliclyShared = (share && share.published) || sharedParent;
+  const isPubliclyShared =
+    (share && share.published) ||
+    (sharedParent && sharedParent.published && !document.isDraft);
 
   useKeyDown("Escape", onRequestClose);
 
@@ -117,7 +120,7 @@ function SharePopover({
         {t("Share this document")}
       </Heading>
 
-      {sharedParent && (
+      {sharedParent && !document.isDraft && (
         <Notice>
           <Trans
             defaults="This document is shared because the parent <em>{{ documentTitle }}</em> is publicly shared"
@@ -162,10 +165,12 @@ function SharePopover({
           </SwitchLabel>
         </SwitchWrapper>
       ) : (
-        <HelpText>{t("Only team members with permission can view")}</HelpText>
+        <Text type="secondary">
+          {t("Only team members with permission can view")}
+        </Text>
       )}
 
-      {canPublish && share?.published && (
+      {canPublish && share?.published && !document.isDraft && (
         <SwitchWrapper>
           <Switch
             id="includeChildDocuments"
@@ -229,7 +234,7 @@ const SwitchLabel = styled(Flex)`
   }
 `;
 
-const SwitchText = styled(HelpText)`
+const SwitchText = styled(Text)`
   margin: 0;
   font-size: 15px;
 `;
