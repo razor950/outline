@@ -138,6 +138,19 @@ class DocumentScene extends React.Component<Props> {
     }
   }
 
+  componentWillUnmount() {
+    if (
+      this.isEmpty &&
+      this.props.document.createdBy.id === this.props.auth.user?.id &&
+      this.props.document.isDraft &&
+      this.props.document.isActive &&
+      this.props.document.hasEmptyTitle &&
+      this.props.document.isPersistedOnce
+    ) {
+      this.props.document.delete();
+    }
+  }
+
   replaceDocument = (template: Document | Revision) => {
     const editorRef = this.editor.current;
 
@@ -187,7 +200,7 @@ class DocumentScene extends React.Component<Props> {
     if (response) {
       this.replaceDocument(response.data);
       toasts.showToast(t("Document restored"));
-      history.replace(this.props.document.url);
+      history.replace(this.props.document.url, history.location.state);
     }
   };
 
@@ -341,16 +354,17 @@ class DocumentScene extends React.Component<Props> {
     this.isEditorDirty = editorText !== document.text.trim();
 
     // a single hash is a doc with just an empty title
-    this.isEmpty = (!editorText || editorText === "#") && !this.title;
+    this.isEmpty =
+      (!editorText || editorText === "#" || editorText === "\\") && !this.title;
   };
 
   updateIsDirtyDebounced = debounce(this.updateIsDirty, 500);
 
-  onImageUploadStart = () => {
+  onFileUploadStart = () => {
     this.isUploading = true;
   };
 
-  onImageUploadStop = () => {
+  onFileUploadStop = () => {
     this.isUploading = false;
   };
 
@@ -383,6 +397,7 @@ class DocumentScene extends React.Component<Props> {
   };
 
   onChangeTitle = action((value: string) => {
+    this.title = value;
     this.props.document.title = value;
     this.updateIsDirty();
     this.autosave();
@@ -416,8 +431,10 @@ class DocumentScene extends React.Component<Props> {
         this.editor.current.getHeadings()
       : [];
 
+    const hasHeadings = headings.length > 0;
     const showContents =
-      ui.tocVisible && (readOnly || team?.collaborativeEditing);
+      ui.tocVisible &&
+      ((readOnly && hasHeadings) || team?.collaborativeEditing);
     const collaborativeEditing =
       team?.collaborativeEditing &&
       !document.isArchived &&
@@ -432,7 +449,12 @@ class DocumentScene extends React.Component<Props> {
     return (
       <ErrorBoundary>
         {this.props.location.pathname !== canonicalUrl && (
-          <Redirect to={canonicalUrl} />
+          <Redirect
+            to={{
+              pathname: canonicalUrl,
+              state: this.props.location.state,
+            }}
+          />
         )}
         <RegisterKeyDown trigger="m" handler={this.goToMove} />
         <RegisterKeyDown trigger="e" handler={this.goToEdit} />
@@ -509,6 +531,7 @@ class DocumentScene extends React.Component<Props> {
             )}
             <Header
               document={document}
+              documentHasHeadings={hasHeadings}
               shareId={shareId}
               isRevision={!!revision}
               isDraft={document.isDraft}
@@ -555,8 +578,8 @@ class DocumentScene extends React.Component<Props> {
                     defaultValue={value}
                     embedsDisabled={embedsDisabled}
                     onSynced={this.onSynced}
-                    onImageUploadStart={this.onImageUploadStart}
-                    onImageUploadStop={this.onImageUploadStop}
+                    onFileUploadStart={this.onFileUploadStart}
+                    onFileUploadStop={this.onFileUploadStop}
                     onSearchLink={this.props.onSearchLink}
                     onCreateLink={this.props.onCreateLink}
                     onChangeTitle={this.onChangeTitle}
@@ -634,6 +657,7 @@ const MaxWidth = styled(Flex)<MaxWidthProps>`
   padding-bottom: 16px;
 
   ${breakpoint("tablet")`
+    padding: 0 44px;
     margin: 4px auto 12px;
     max-width: ${(props: MaxWidthProps) =>
       props.isFullWidth

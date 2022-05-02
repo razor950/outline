@@ -21,6 +21,7 @@ import {
 } from "~/types";
 import Header from "./Header";
 import MenuItem, { MenuAnchor } from "./MenuItem";
+import MouseSafeArea from "./MouseSafeArea";
 import Separator from "./Separator";
 import ContextMenu from ".";
 
@@ -53,12 +54,13 @@ const Submenu = React.forwardRef(
       <>
         <MenuButton ref={ref} {...menu} {...rest}>
           {(props) => (
-            <MenuAnchor {...props}>
+            <MenuAnchor disclosure {...props}>
               {title} <Disclosure color={theme.textTertiary} />
             </MenuAnchor>
           )}
         </MenuButton>
         <ContextMenu {...menu} aria-label={t("Submenu")}>
+          <MouseSafeArea parentRef={menu.unstable_popoverRef} />
           <Template {...menu} items={templateItems} />
         </ContextMenu>
       </>

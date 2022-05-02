@@ -6,17 +6,17 @@ import { useTranslation, Trans } from "react-i18next";
 import { VisuallyHidden } from "reakit/VisuallyHidden";
 import getDataTransferFiles from "@shared/utils/getDataTransferFiles";
 import { cdnPath } from "@shared/utils/urls";
+import FileOperation from "~/models/FileOperation";
 import Button from "~/components/Button";
 import Heading from "~/components/Heading";
 import Item from "~/components/List/Item";
 import OutlineLogo from "~/components/OutlineLogo";
 import PaginatedList from "~/components/PaginatedList";
 import Scene from "~/components/Scene";
-import Subheading from "~/components/Subheading";
 import Text from "~/components/Text";
 import useStores from "~/hooks/useStores";
 import useToasts from "~/hooks/useToasts";
-import { uploadFile } from "~/utils/uploadFile";
+import { uploadFile } from "~/utils/files";
 import FileOperationListItem from "./components/FileOperationListItem";
 
 function Import() {
@@ -139,11 +139,11 @@ function Import() {
           type: "import",
         }}
         heading={
-          <Subheading>
+          <h2>
             <Trans>Recent imports</Trans>
-          </Subheading>
+          </h2>
         }
-        renderItem={(item) => (
+        renderItem={(item: FileOperation) => (
           <FileOperationListItem key={item.id} fileOperation={item} />
         )}
       />

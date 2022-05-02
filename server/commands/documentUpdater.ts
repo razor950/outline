@@ -1,7 +1,7 @@
+import { yDocToProsemirrorJSON } from "@getoutline/y-prosemirror";
 import invariant from "invariant";
 import { uniq } from "lodash";
 import { Node } from "prosemirror-model";
-import { yDocToProsemirrorJSON } from "y-prosemirror";
 import * as Y from "yjs";
 import { schema, serializer } from "@server/editor";
 import { Document, Event } from "@server/models";
@@ -15,7 +15,7 @@ export default async function documentUpdater({
   ydoc: Y.Doc;
   userId?: string;
 }) {
-  const document = await Document.findByPk(documentId);
+  const document = await Document.scope("withState").findByPk(documentId);
   invariant(document, "document not found");
 
   const state = Y.encodeStateAsUpdate(ydoc);
@@ -34,7 +34,7 @@ export default async function documentUpdater({
   const existingIds = document.collaboratorIds;
   const collaboratorIds = uniq([...pudIds, ...existingIds]);
 
-  await Document.scope("withUnpublished").update(
+  await Document.scope(["withDrafts", "withState"]).update(
     {
       text,
       state: Buffer.from(state),
@@ -55,7 +55,7 @@ export default async function documentUpdater({
     return;
   }
 
-  await Event.add({
+  await Event.schedule({
     name: "documents.update",
     documentId: document.id,
     collectionId: document.collectionId,

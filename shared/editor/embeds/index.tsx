@@ -1,8 +1,10 @@
 import * as React from "react";
 import styled from "styled-components";
 import { EmbedDescriptor } from "@shared/editor/types";
+import Image from "../components/Image";
 import Abstract from "./Abstract";
 import Airtable from "./Airtable";
+import Berrycast from "./Berrycast";
 import Bilibili from "./Bilibili";
 import Cawemo from "./Cawemo";
 import ClickUp from "./ClickUp";
@@ -35,7 +37,6 @@ import Typeform from "./Typeform";
 import Vimeo from "./Vimeo";
 import Whimsical from "./Whimsical";
 import YouTube from "./YouTube";
-import Image from "./components/Image";
 
 export type EmbedProps = {
   isSelected: boolean;
@@ -85,6 +86,14 @@ const embeds: EmbedDescriptor[] = [
     icon: () => <Img src="/images/airtable.png" alt="Airtable" />,
     component: Airtable,
     matcher: matcher(Airtable),
+  },
+  {
+    title: "Berrycast",
+    keywords: "video",
+    defaultHidden: true,
+    icon: () => <Img src="/images/berrycast.png" alt="Berrycast" />,
+    component: Berrycast,
+    matcher: matcher(Berrycast),
   },
   {
     title: "Bilibili",

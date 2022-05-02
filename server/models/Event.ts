@@ -1,6 +1,6 @@
 import {
   ForeignKey,
-  AfterCreate,
+  AfterSave,
   BeforeCreate,
   BelongsTo,
   Column,
@@ -44,7 +44,7 @@ class Event extends BaseModel {
     }
   }
 
-  @AfterCreate
+  @AfterSave
   static async enqueue(model: Event) {
     globalEventQueue.add(model);
   }
@@ -86,9 +86,9 @@ class Event extends BaseModel {
   @Column(DataType.UUID)
   teamId: string;
 
-  // add can be used to send events into the event system without recording them
-  // in the database or audit trail
-  static add(event: Partial<Event>) {
+  // Schedule can be used to send events into the event system without recording
+  // them in the database or audit trail – consider using a task instead.
+  static schedule(event: Partial<Event>) {
     const now = new Date();
     globalEventQueue.add(
       this.build({
