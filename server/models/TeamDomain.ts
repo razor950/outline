@@ -1,18 +1,24 @@
+import emailProviders from "email-providers";
 import {
   Column,
   Table,
   BelongsTo,
   ForeignKey,
   NotEmpty,
+  NotIn,
 } from "sequelize-typescript";
 import Team from "./Team";
 import User from "./User";
-import BaseModel from "./base/BaseModel";
+import IdModel from "./base/IdModel";
 import Fix from "./decorators/Fix";
 
 @Table({ tableName: "team_domains", modelName: "team_domain" })
 @Fix
-class TeamDomain extends BaseModel {
+class TeamDomain extends IdModel {
+  @NotIn({
+    args: [emailProviders],
+    msg: "You chose a restricted domain, please try another.",
+  })
   @NotEmpty
   @Column
   name: string;

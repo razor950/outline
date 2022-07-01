@@ -39,6 +39,7 @@ function AuthLogo({ providerName, size = 16 }: Props) {
           <GithubLogo size={size} />
         </Logo>
       );
+
     default:
       return null;
   }

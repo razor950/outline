@@ -15,6 +15,7 @@ import {
 import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 import { Heading } from "@shared/editor/lib/getHeadings";
+import { parseDomain } from "@shared/utils/domains";
 import getTasks from "@shared/utils/getTasks";
 import RootStore from "~/stores/RootStore";
 import Document from "~/models/Document";
@@ -33,7 +34,6 @@ import withStores from "~/components/withStores";
 import type { Editor as TEditor } from "~/editor";
 import { NavigationNode } from "~/types";
 import { client } from "~/utils/ApiClient";
-import { isCustomDomain } from "~/utils/domains";
 import { emojiToUrl } from "~/utils/emoji";
 import { isModKey } from "~/utils/keyboard";
 import {
@@ -285,7 +285,7 @@ class DocumentScene extends React.Component<Props> {
       autosave?: boolean;
     } = {}
   ) => {
-    const { document, auth } = this.props;
+    const { document } = this.props;
     // prevent saves when we are already saving
     if (document.isSaving) {
       return;
@@ -311,22 +311,10 @@ class DocumentScene extends React.Component<Props> {
     this.isPublishing = !!options.publish;
 
     try {
-      let savedDocument = document;
-
-      if (auth.team?.collaborativeEditing) {
-        // update does not send "text" field to the API, this is a workaround
-        // while the multiplayer editor is toggleable. Once it's finalized
-        // this can be cleaned up to single code path
-        savedDocument = await document.update({
-          ...options,
-          lastRevision: this.lastRevision,
-        });
-      } else {
-        savedDocument = await document.save({
-          ...options,
-          lastRevision: this.lastRevision,
-        });
-      }
+      const savedDocument = await document.save({
+        ...options,
+        lastRevision: this.lastRevision,
+      });
 
       this.isEditorDirty = false;
       this.lastRevision = savedDocument.revision;
@@ -379,15 +367,6 @@ class DocumentScene extends React.Component<Props> {
     const { document, auth } = this.props;
     this.getEditorText = getEditorText;
 
-    // Keep headings in sync for table of contents
-    const headings = this.editor.current?.getHeadings() ?? [];
-    if (
-      headings.map((h) => h.level + h.title).join("") !==
-      this.headings.map((h) => h.level + h.title).join("")
-    ) {
-      this.headings = headings;
-    }
-
     // Keep derived task list in sync
     const tasks = this.editor.current?.getTasks();
     const total = tasks?.length ?? 0;
@@ -412,6 +391,10 @@ class DocumentScene extends React.Component<Props> {
       this.updateIsDirtyDebounced();
       this.autosave();
     }
+  };
+
+  onHeadingsChange = (headings: Heading[]) => {
+    this.headings = headings;
   };
 
   onChangeTitle = action((value: string) => {
@@ -598,6 +581,7 @@ class DocumentScene extends React.Component<Props> {
                     onCreateLink={this.props.onCreateLink}
                     onChangeTitle={this.onChangeTitle}
                     onChange={this.onChange}
+                    onHeadingsChange={this.onHeadingsChange}
                     onSave={this.onSave}
                     onPublish={this.onPublish}
                     onCancel={this.goBack}
@@ -625,7 +609,7 @@ class DocumentScene extends React.Component<Props> {
                 </Flex>
               </React.Suspense>
             </MaxWidth>
-            {isShare && !isCustomDomain() && (
+            {isShare && !parseDomain(window.location.origin).custom && (
               <Branding href="//www.getoutline.com?ref=sharelink" />
             )}
           </Container>

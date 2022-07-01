@@ -19,7 +19,7 @@ import {
   DataType,
 } from "sequelize-typescript";
 import { v4 as uuidv4 } from "uuid";
-import { stripSubdomain, RESERVED_SUBDOMAINS } from "@shared/utils/domains";
+import { getBaseDomain, RESERVED_SUBDOMAINS } from "@shared/utils/domains";
 import env from "@server/env";
 import Logger from "@server/logging/Logger";
 import { generateAvatarUrl } from "@server/utils/avatars";
@@ -35,6 +35,9 @@ import Fix from "./decorators/Fix";
 const readFile = util.promisify(fs.readFile);
 
 @Scopes(() => ({
+  withDomains: {
+    include: [{ model: TeamDomain }],
+  },
   withAuthenticationProviders: {
     include: [
       {
@@ -122,6 +125,7 @@ class Team extends ParanoidModel {
   }
 
   get url() {
+    // custom domain
     if (this.domain) {
       return `https://${this.domain}`;
     }
@@ -131,7 +135,7 @@ class Team extends ParanoidModel {
     }
 
     const url = new URL(env.URL);
-    url.host = `${this.subdomain}.${stripSubdomain(url.host)}`;
+    url.host = `${this.subdomain}.${getBaseDomain()}`;
     return url.href.replace(/\/$/, "");
   }
 
@@ -144,35 +148,6 @@ class Team extends ParanoidModel {
       })
     );
   }
-
-  // TODO: Move to command
-  provisionSubdomain = async function (
-    requestedSubdomain: string,
-    options = {}
-  ) {
-    if (this.subdomain) {
-      return this.subdomain;
-    }
-    let subdomain = requestedSubdomain;
-    let append = 0;
-
-    for (;;) {
-      try {
-        await this.update(
-          {
-            subdomain,
-          },
-          options
-        );
-        break;
-      } catch (err) {
-        // subdomain was invalid or already used, try again
-        subdomain = `${requestedSubdomain}${++append}`;
-      }
-    }
-
-    return subdomain;
-  };
 
   provisionFirstCollection = async (userId: string) => {
     await this.sequelize!.transaction(async (transaction) => {
