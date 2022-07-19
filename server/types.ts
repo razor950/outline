@@ -1,11 +1,16 @@
 import { Context } from "koa";
 import { FileOperation, Team, User } from "./models";
 
+export enum AuthenticationTypes {
+  API = "api",
+  APP = "app",
+}
+
 export type ContextWithState = Context & {
   state: {
     user: User;
     token: string;
-    authType: "app" | "api";
+    authType: AuthenticationTypes;
   };
 };
 
@@ -23,11 +28,37 @@ export type ApiKeyEvent = BaseEvent & {
   };
 };
 
+export type AttachmentEvent = BaseEvent &
+  (
+    | {
+        name: "attachments.create";
+        modelId: string;
+        data: {
+          name: string;
+          source: string;
+        };
+      }
+    | {
+        name: "attachments.delete";
+        modelId: string;
+        data: {
+          name: string;
+        };
+      }
+  );
+
+export type AuthenticationProviderEvent = BaseEvent & {
+  name: "authenticationProviders.update";
+  modelId: string;
+  data: {
+    enabled: boolean;
+  };
+};
+
 export type UserEvent = BaseEvent &
   (
     | {
         name:
-          | "users.create"
           | "users.signin"
           | "users.signout"
           | "users.update"
@@ -35,6 +66,13 @@ export type UserEvent = BaseEvent &
           | "users.activate"
           | "users.delete";
         userId: string;
+      }
+    | {
+        name: "users.create" | "users.promote" | "users.demote";
+        userId: string;
+        data: {
+          name: string;
+        };
       }
     | {
         name: "users.invite";
@@ -113,7 +151,7 @@ export type FileOperationEvent = BaseEvent & {
   name:
     | "fileOperations.create"
     | "fileOperations.update"
-    | "fileOperation.delete";
+    | "fileOperations.delete";
   modelId: string;
   data: Partial<FileOperation>;
 };
@@ -191,7 +229,7 @@ export type IntegrationEvent = BaseEvent & {
 };
 
 export type TeamEvent = BaseEvent & {
-  name: "teams.update";
+  name: "teams.create" | "teams.update";
   data: Partial<Team>;
 };
 
@@ -244,7 +282,8 @@ export type WebhookSubscriptionEvent = BaseEvent & {
 
 export type Event =
   | ApiKeyEvent
-  | UserEvent
+  | AttachmentEvent
+  | AuthenticationProviderEvent
   | DocumentEvent
   | PinEvent
   | StarEvent
@@ -255,5 +294,6 @@ export type Event =
   | RevisionEvent
   | ShareEvent
   | TeamEvent
+  | UserEvent
   | ViewEvent
   | WebhookSubscriptionEvent;

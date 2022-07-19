@@ -8,24 +8,28 @@ import {
   DataType,
   IsUrl,
 } from "sequelize-typescript";
+import { SaveOptions } from "sequelize/types";
 import { Event } from "@server/types";
 import Team from "./Team";
 import User from "./User";
-import IdModel from "./base/IdModel";
+import ParanoidModel from "./base/ParanoidModel";
 import Fix from "./decorators/Fix";
+import Length from "./validators/Length";
 
 @Table({
   tableName: "webhook_subscriptions",
   modelName: "webhook_subscription",
 })
 @Fix
-class WebhookSubscription extends IdModel {
+class WebhookSubscription extends ParanoidModel {
   @NotEmpty
+  @Length({ max: 255, msg: "Webhook name be less than 255 characters" })
   @Column
   name: string;
 
   @IsUrl
   @NotEmpty
+  @Length({ max: 255, msg: "Webhook url be less than 255 characters" })
   @Column
   url: string;
 
@@ -52,7 +56,18 @@ class WebhookSubscription extends IdModel {
   teamId: string;
 
   // methods
-  validForEvent = (event: Event): bool => {
+
+  /**
+   * Disables the webhook subscription
+   *
+   * @param options Save options
+   * @returns Promise<void>
+   */
+  public async disable(options?: SaveOptions<WebhookSubscription>) {
+    return this.update({ enabled: false }, options);
+  }
+
+  public validForEvent = (event: Event): bool => {
     if (this.events.length === 1 && this.events[0] === "*") {
       return true;
     }

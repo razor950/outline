@@ -32,14 +32,14 @@ function AuthLogo({ providerName, size = 16 }: Props) {
           <MicrosoftLogo size={size} />
         </Logo>
       );
-
+    
     case "github":
       return (
         <Logo>
           <GithubLogo size={size} />
         </Logo>
       );
-
+    
     default:
       return null;
   }

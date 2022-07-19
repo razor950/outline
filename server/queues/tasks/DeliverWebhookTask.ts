@@ -1,5 +1,7 @@
 import fetch from "fetch-with-proxy";
-import invariant from "invariant";
+import { useAgent } from "request-filtering-agent";
+import { Op } from "sequelize";
+import WebhookDisabledEmail from "@server/emails/templates/WebhookDisabledEmail";
 import env from "@server/env";
 import Logger from "@server/logging/Logger";
 import {
@@ -73,8 +75,9 @@ type Props = {
 
 export default class DeliverWebhookTask extends BaseTask<Props> {
   public async perform({ subscriptionId, event }: Props) {
-    const subscription = await WebhookSubscription.findByPk(subscriptionId);
-    invariant(subscription, "Subscription not found");
+    const subscription = await WebhookSubscription.findByPk(subscriptionId, {
+      rejectOnEmpty: true,
+    });
 
     Logger.info(
       "task",
@@ -84,6 +87,9 @@ export default class DeliverWebhookTask extends BaseTask<Props> {
     switch (event.name) {
       case "api_keys.create":
       case "api_keys.delete":
+      case "attachments.create":
+      case "attachments.delete":
+      case "authenticationProviders.update":
         // Ignored
         return;
       case "users.create":
@@ -94,6 +100,8 @@ export default class DeliverWebhookTask extends BaseTask<Props> {
       case "users.activate":
       case "users.delete":
       case "users.invite":
+      case "users.promote":
+      case "users.demote":
         await this.handleUserEvent(subscription, event);
         return;
       case "documents.create":
@@ -120,7 +128,7 @@ export default class DeliverWebhookTask extends BaseTask<Props> {
         return;
       case "fileOperations.create":
       case "fileOperations.update":
-      case "fileOperation.delete":
+      case "fileOperations.delete":
         await this.handleFileOperationEvent(subscription, event);
         return;
       case "collections.create":
@@ -150,6 +158,9 @@ export default class DeliverWebhookTask extends BaseTask<Props> {
       case "integrations.create":
       case "integrations.update":
         await this.handleIntegrationEvent(subscription, event);
+        return;
+      case "teams.create":
+        // Ignored
         return;
       case "teams.update":
         await this.handleTeamEvent(subscription, event);
@@ -525,6 +536,9 @@ export default class DeliverWebhookTask extends BaseTask<Props> {
         method: "POST",
         headers: requestHeaders,
         body: JSON.stringify(requestBody),
+        redirect: "error",
+        timeout: 5000,
+        agent: useAgent(subscription.url),
       });
       status = response.ok ? "success" : "failed";
     } catch (err) {
@@ -546,21 +560,52 @@ export default class DeliverWebhookTask extends BaseTask<Props> {
         : {},
     });
 
-    if (response && !response.ok) {
-      const recentDeliveries = await WebhookDelivery.findAll({
-        where: {
-          webhookSubscriptionId: subscription.id,
-        },
-        order: [["createdAt", "DESC"]],
-        limit: 25,
-      });
+    if (status === "failed") {
+      try {
+        await this.checkAndDisableSubscription(subscription);
+      } catch (err) {
+        Logger.error("Failed to check and disable recent deliveries", err, {
+          event,
+          deliveryId: delivery.id,
+        });
+      }
+    }
+  }
 
-      const allFailed = recentDeliveries.every(
-        (delivery) => delivery.status === "failed"
-      );
+  private async checkAndDisableSubscription(subscription: WebhookSubscription) {
+    const recentDeliveries = await WebhookDelivery.findAll({
+      where: {
+        webhookSubscriptionId: subscription.id,
+      },
+      order: [["createdAt", "DESC"]],
+      limit: 25,
+    });
 
-      if (recentDeliveries.length === 25 && allFailed) {
-        await subscription.update({ enabled: false });
+    const allFailed = recentDeliveries.every(
+      (delivery) => delivery.status === "failed"
+    );
+
+    if (recentDeliveries.length === 25 && allFailed) {
+      // If the last 25 deliveries failed, disable the subscription
+      await subscription.disable();
+
+      // Send an email to the creator of the webhook to let them know
+      const [createdBy, team] = await Promise.all([
+        User.findOne({
+          where: {
+            id: subscription.createdById,
+            suspendedAt: { [Op.is]: null },
+          },
+        }),
+        subscription.$get("team"),
+      ]);
+
+      if (createdBy && team) {
+        await WebhookDisabledEmail.schedule({
+          to: createdBy.email,
+          teamUrl: team.url,
+          webhookName: subscription.name,
+        });
       }
     }
   }
