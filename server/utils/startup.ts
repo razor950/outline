@@ -6,7 +6,7 @@ import AuthenticationProvider from "@server/models/AuthenticationProvider";
 import Team from "@server/models/Team";
 
 export function checkPendingMigrations() {
-  const commandResult = execSync("yarn sequelize db:migrate:status");
+  const commandResult = execSync("yarn sequelize db:migrate:status --env=production-ssl-disabled");
   const commandResultArray = Buffer.from(commandResult)
     .toString("utf-8")
     .split("\n");
