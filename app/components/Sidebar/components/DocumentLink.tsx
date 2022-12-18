@@ -6,8 +6,8 @@ import { useDrag, useDrop } from "react-dnd";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
-import { MAX_TITLE_LENGTH } from "@shared/constants";
 import { sortNavigationNodes } from "@shared/utils/collections";
+import { DocumentValidation } from "@shared/validations";
 import Collection from "~/models/Collection";
 import Document from "~/models/Document";
 import Fade from "~/components/Fade";
@@ -291,6 +291,21 @@ function InnerDocumentLink(
   const isExpanded = expanded && !isDragging;
   const hasChildren = nodeChildren.length > 0;
 
+  const handleKeyDown = React.useCallback(
+    (ev: React.KeyboardEvent) => {
+      if (!hasChildren) {
+        return;
+      }
+      if (ev.key === "ArrowRight" && !expanded) {
+        setExpanded(true);
+      }
+      if (ev.key === "ArrowLeft" && expanded) {
+        setExpanded(false);
+      }
+    },
+    [hasChildren, expanded]
+  );
+
   return (
     <>
       <Relative onDragLeave={resetHoverExpanding}>
@@ -299,6 +314,7 @@ function InnerDocumentLink(
           ref={drag}
           $isDragging={isDragging}
           $isMoving={isMoving}
+          onKeyDown={handleKeyDown}
         >
           <div ref={dropToReparent}>
             <DropToImport documentId={node.id} activeClassName="activeDropZone">
@@ -319,7 +335,7 @@ function InnerDocumentLink(
                     onSubmit={handleTitleChange}
                     onEditing={handleTitleEditing}
                     canUpdate={canUpdate}
-                    maxLength={MAX_TITLE_LENGTH}
+                    maxLength={DocumentValidation.maxTitleLength}
                   />
                 }
                 isActive={(match, location: Location<{ starred?: boolean }>) =>

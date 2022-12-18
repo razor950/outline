@@ -1,3 +1,4 @@
+import { observer } from "mobx-react";
 import { PlusIcon } from "outline-icons";
 import * as React from "react";
 import { Trans, useTranslation } from "react-i18next";
@@ -20,7 +21,7 @@ const UserListItem = ({ user, onAdd, canEdit }: Props) => {
   return (
     <ListItem
       title={user.name}
-      image={<Avatar src={user.avatarUrl} size={32} />}
+      image={<Avatar model={user} size={32} />}
       subtitle={
         <>
           {user.lastActiveAt ? (
@@ -45,4 +46,4 @@ const UserListItem = ({ user, onAdd, canEdit }: Props) => {
   );
 };
 
-export default UserListItem;
+export default observer(UserListItem);

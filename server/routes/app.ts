@@ -3,6 +3,7 @@ import path from "path";
 import util from "util";
 import { Context, Next } from "koa";
 import { escape } from "lodash";
+import { Sequelize } from "sequelize";
 import documentLoader from "@server/commands/documentLoader";
 import env from "@server/env";
 import presentEnv from "@server/presenters/env";
@@ -11,14 +12,25 @@ import prefetchTags from "@server/utils/prefetchTags";
 const isProduction = env.ENVIRONMENT === "production";
 const isTest = env.ENVIRONMENT === "test";
 const readFile = util.promisify(fs.readFile);
+let indexHtmlCache: Buffer | undefined;
 
 const readIndexFile = async (ctx: Context): Promise<Buffer> => {
   if (isProduction) {
-    return readFile(path.join(__dirname, "../../app/index.html"));
+    return (
+      indexHtmlCache ??
+      (indexHtmlCache = await readFile(
+        path.join(__dirname, "../../app/index.html")
+      ))
+    );
   }
 
   if (isTest) {
-    return readFile(path.join(__dirname, "../static/index.html"));
+    return (
+      indexHtmlCache ??
+      (indexHtmlCache = await readFile(
+        path.join(__dirname, "../static/index.html")
+      ))
+    );
   }
 
   const middleware = ctx.devMiddleware;
@@ -81,6 +93,13 @@ export const renderShare = async (ctx: Context, next: Next) => {
     });
     share = result.share;
     document = result.document;
+
+    if (share && !ctx.userAgent.isBot) {
+      await share.update({
+        lastAccessedAt: new Date(),
+        views: Sequelize.literal("views + 1"),
+      });
+    }
   } catch (err) {
     // If the share or document does not exist, return a 404.
     ctx.status = 404;

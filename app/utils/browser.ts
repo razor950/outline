@@ -12,15 +12,21 @@ export function isTouchDevice(): boolean {
  * Returns true if the client is running on a Mac.
  */
 export function isMac(): boolean {
-  const SSR = typeof window === "undefined";
-  return !SSR && window.navigator.platform === "MacIntel";
+  return window.navigator.platform === "MacIntel";
+}
+
+/**
+ * Returns true if the client is running on Windows.
+ */
+export function isWindows(): boolean {
+  return window.navigator.platform === "Win32";
 }
 
 let supportsPassive = false;
 
 try {
   const opts = Object.defineProperty({}, "passive", {
-    get: function () {
+    get() {
       supportsPassive = true;
     },
   });

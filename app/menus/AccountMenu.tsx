@@ -6,12 +6,14 @@ import ContextMenu from "~/components/ContextMenu";
 import Template from "~/components/ContextMenu/Template";
 import {
   navigateToProfileSettings,
+  navigateToAccountPreferences,
   openKeyboardShortcuts,
   openChangelog,
   openAPIDocumentation,
   openBugReportUrl,
   openFeedbackUrl,
   logout,
+  downloadApp,
 } from "~/actions/definitions/navigation";
 import { changeTheme } from "~/actions/definitions/settings";
 import usePrevious from "~/hooks/usePrevious";
@@ -37,6 +39,7 @@ const AccountMenu: React.FC = ({ children }) => {
   const actions = React.useMemo(() => {
     return [
       openKeyboardShortcuts,
+      downloadApp,
       openAPIDocumentation,
       separator(),
       openChangelog,
@@ -44,6 +47,7 @@ const AccountMenu: React.FC = ({ children }) => {
       openBugReportUrl,
       changeTheme,
       navigateToProfileSettings,
+      navigateToAccountPreferences,
       separator(),
       logout,
     ];

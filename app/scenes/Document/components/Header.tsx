@@ -20,6 +20,8 @@ import Collaborators from "~/components/Collaborators";
 import DocumentBreadcrumb from "~/components/DocumentBreadcrumb";
 import Header from "~/components/Header";
 import Tooltip from "~/components/Tooltip";
+import { restoreRevision } from "~/actions/definitions/revisions";
+import useActionContext from "~/hooks/useActionContext";
 import useMobile from "~/hooks/useMobile";
 import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
@@ -99,8 +101,12 @@ function DocumentHeader({
     });
   }, [onSave]);
 
+  const context = useActionContext({
+    activeDocumentId: document?.id,
+  });
+
   const { isDeleted, isTemplate } = document;
-  const can = usePolicy(document.id);
+  const can = usePolicy(document?.id);
   const canToggleEmbeds = team?.documentEmbeds;
   const canEdit = can.update && !isEditing;
   const toc = (
@@ -168,7 +174,7 @@ function DocumentHeader({
       <Header
         title={document.title}
         hasSidebar={!!sharedTree}
-        breadcrumb={
+        left={
           isMobile ? (
             <TableOfContentsMenu headings={headings} />
           ) : (
@@ -195,30 +201,30 @@ function DocumentHeader({
     <>
       <Header
         hasSidebar
-        breadcrumb={
+        left={
           isMobile ? (
             <TableOfContentsMenu headings={headings} />
           ) : (
-            <DocumentBreadcrumb document={document}>
-              {!isEditing && toc}
-            </DocumentBreadcrumb>
+            <DocumentBreadcrumb document={document}>{toc}</DocumentBreadcrumb>
           )
         }
         title={
           <>
             {document.title}{" "}
-            {document.isArchived && <Badge>{t("Archived")}</Badge>}
+            {document.isArchived && (
+              <ArchivedBadge>{t("Archived")}</ArchivedBadge>
+            )}
           </>
         }
         actions={
           <>
             <ObservingBanner />
 
-            {!isPublishing && isSaving && !team?.collaborativeEditing && (
+            {!isPublishing && isSaving && !team?.seamlessEditing && (
               <Status>{t("Saving")}…</Status>
             )}
-            {!isDeleted && <Collaborators document={document} />}
-            {(isEditing || team?.collaborativeEditing) && !isTemplate && isNew && (
+            {!isDeleted && !isRevision && <Collaborators document={document} />}
+            {(isEditing || team?.seamlessEditing) && !isTemplate && isNew && (
               <Action>
                 <TemplatesMenu
                   document={document}
@@ -226,11 +232,15 @@ function DocumentHeader({
                 />
               </Action>
             )}
-            {!isEditing && !isDeleted && (!isMobile || !isTemplate) && (
-              <Action>
-                <ShareButton document={document} />
-              </Action>
-            )}
+            {!isEditing &&
+              !isDeleted &&
+              !isRevision &&
+              (!isMobile || !isTemplate) &&
+              document.collectionId && (
+                <Action>
+                  <ShareButton document={document} />
+                </Action>
+              )}
             {isEditing && (
               <>
                 <Action>
@@ -251,8 +261,8 @@ function DocumentHeader({
                 </Action>
               </>
             )}
-            {canEdit && !team?.collaborativeEditing && editAction}
-            {canEdit && can.createChildDocument && !isMobile && (
+            {canEdit && !team?.seamlessEditing && !isRevision && editAction}
+            {canEdit && can.createChildDocument && !isRevision && !isMobile && (
               <Action>
                 <NewChildDocumentMenu
                   document={document}
@@ -279,10 +289,27 @@ function DocumentHeader({
                   to={newDocumentPath(document.collectionId, {
                     templateId: document.id,
                   })}
-                  primary
                 >
                   {t("New from template")}
                 </Button>
+              </Action>
+            )}
+            {isRevision && (
+              <Action>
+                <Tooltip
+                  tooltip={t("Restore version")}
+                  delay={500}
+                  placement="bottom"
+                >
+                  <Button
+                    action={restoreRevision}
+                    context={context}
+                    neutral
+                    hideOnActionDisabled
+                  >
+                    {t("Restore")}
+                  </Button>
+                </Tooltip>
               </Action>
             )}
             {can.update && isDraft && !isRevision && (
@@ -330,6 +357,10 @@ function DocumentHeader({
     </>
   );
 }
+
+const ArchivedBadge = styled(Badge)`
+  position: absolute;
+`;
 
 const Status = styled(Action)`
   padding-left: 0;

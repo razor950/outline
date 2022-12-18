@@ -1,11 +1,9 @@
 import passport from "@outlinewiki/koa-passport";
-import { Request } from "koa";
+import type { Context } from "koa";
 import Router from "koa-router";
 import { Profile } from "passport";
 import { Strategy as SlackStrategy } from "passport-slack-oauth2";
-import accountProvisioner, {
-  AccountProvisionerResult,
-} from "@server/commands/accountProvisioner";
+import accountProvisioner from "@server/commands/accountProvisioner";
 import env from "@server/env";
 import auth from "@server/middlewares/authentication";
 import passportMiddleware from "@server/middlewares/passport";
@@ -16,7 +14,12 @@ import {
   Team,
   User,
 } from "@server/models";
-import { StateStore } from "@server/utils/passport";
+import { AuthenticationResult } from "@server/types";
+import {
+  getClientFromContext,
+  getTeamFromContext,
+  StateStore,
+} from "@server/utils/passport";
 import * as Slack from "@server/utils/slack";
 import { assertPresent, assertUuid } from "@server/validation";
 
@@ -46,6 +49,15 @@ const scopes = [
   "identity.team",
 ];
 
+function redirectOnClient(ctx: Context, url: string) {
+  ctx.type = "text/html";
+  ctx.body = `
+<html>
+<head>
+<meta http-equiv="refresh" content="0;URL='${url}'"/>
+</head>`;
+}
+
 export const config = {
   name: "Slack",
   enabled: !!env.SLACK_CLIENT_ID,
@@ -63,7 +75,7 @@ if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET) {
       scope: scopes,
     },
     async function (
-      req: Request,
+      ctx: Context,
       accessToken: string,
       refreshToken: string,
       params: { expires_in: number },
@@ -71,13 +83,17 @@ if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET) {
       done: (
         err: Error | null,
         user: User | null,
-        result?: AccountProvisionerResult
+        result?: AuthenticationResult
       ) => void
     ) {
       try {
+        const team = await getTeamFromContext(ctx);
+        const client = getClientFromContext(ctx);
+
         const result = await accountProvisioner({
-          ip: req.ip,
+          ip: ctx.ip,
           team: {
+            teamId: team?.id,
             name: profile.team.name,
             subdomain: profile.team.domain,
             avatarUrl: profile.team.image_230,
@@ -99,7 +115,7 @@ if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET) {
             scopes,
           },
         });
-        return done(null, result.user, result);
+        return done(null, result.user, { ...result, client });
       } catch (err) {
         return done(err, null);
       }
@@ -138,8 +154,9 @@ if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET) {
             const team = await Team.findByPk(String(state), {
               rejectOnEmpty: true,
             });
-            return ctx.redirect(
-              `${team.url}/auth${ctx.request.path}?${ctx.request.querystring}`
+            return redirectOnClient(
+              ctx,
+              `${team.url}/auth/slack.commands?${ctx.request.querystring}`
             );
           } catch (err) {
             return ctx.redirect(
@@ -208,8 +225,9 @@ if (env.SLACK_CLIENT_ID && env.SLACK_CLIENT_SECRET) {
           const team = await Team.findByPk(collection.teamId, {
             rejectOnEmpty: true,
           });
-          return ctx.redirect(
-            `${team.url}/auth${ctx.request.path}?${ctx.request.querystring}`
+          return redirectOnClient(
+            ctx,
+            `${team.url}/auth/slack.post?${ctx.request.querystring}`
           );
         } catch (err) {
           return ctx.redirect(

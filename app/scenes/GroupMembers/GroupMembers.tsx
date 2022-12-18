@@ -26,7 +26,7 @@ function GroupMembers({ group }: Props) {
   const { users, groupMemberships } = useStores();
   const { showToast } = useToasts();
   const { t } = useTranslation();
-  const can = usePolicy(group.id);
+  const can = usePolicy(group);
 
   const handleAddModal = (state: boolean) => {
     setAddModalOpen(state);
@@ -59,7 +59,7 @@ function GroupMembers({ group }: Props) {
         <>
           <Text type="secondary">
             <Trans
-              defaults="Add and remove team members in the <em>{{groupName}}</em> group. Adding people to the group will give them access to any collections this group has been added to."
+              defaults="Add and remove members to the <em>{{groupName}}</em> group. Members of the group will have access to any collections this group has been added to."
               values={{
                 groupName: group.name,
               }}
@@ -82,7 +82,7 @@ function GroupMembers({ group }: Props) {
       ) : (
         <Text type="secondary">
           <Trans
-            defaults="Listing team members in the <em>{{groupName}}</em> group."
+            defaults="Listing members of the <em>{{groupName}}</em> group."
             values={{
               groupName: group.name,
             }}

@@ -1,8 +1,8 @@
 import { buildUser, buildTeam } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import { serialize } from "./index";
 
-beforeEach(() => flushdb());
+setupTestDatabase();
 
 it("should serialize policy", async () => {
   const user = await buildUser();

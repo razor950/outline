@@ -57,6 +57,7 @@ export async function checkMigrations() {
     Logger.warn(`
 This version of Outline cannot start until a data migration is complete.
 Backup your database, run the database migrations and the following script:
+
 $ node ./build/server/scripts/20210226232041-migrate-authentication.js
 `);
     process.exit(1);

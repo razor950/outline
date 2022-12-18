@@ -2,17 +2,23 @@ import { Location } from "history";
 import { observer } from "mobx-react";
 import * as React from "react";
 import { Helmet } from "react-helmet";
-import { RouteComponentProps, useLocation } from "react-router-dom";
-import { useTheme } from "styled-components";
+import { useTranslation } from "react-i18next";
+import { RouteComponentProps, useLocation, Redirect } from "react-router-dom";
+import styled, { useTheme } from "styled-components";
 import { setCookie } from "tiny-cookie";
 import DocumentModel from "~/models/Document";
+import Team from "~/models/Team";
 import Error404 from "~/scenes/Error404";
 import ErrorOffline from "~/scenes/ErrorOffline";
 import Layout from "~/components/Layout";
 import Sidebar from "~/components/Sidebar/Shared";
+import Text from "~/components/Text";
+import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
 import { NavigationNode } from "~/types";
 import { AuthorizationError, OfflineError } from "~/utils/errors";
+import isCloudHosted from "~/utils/isCloudHosted";
+import { changeLanguage, detectLanguage } from "~/utils/language";
 import Login from "../Login";
 import Document from "./components/Document";
 import Loading from "./components/Loading";
@@ -21,6 +27,7 @@ const EMPTY_OBJECT = {};
 
 type Response = {
   document: DocumentModel;
+  team?: Team;
   sharedTree?: NavigationNode | undefined;
 };
 
@@ -72,14 +79,26 @@ function useDocumentId(documentSlug: string, response?: Response) {
 }
 
 function SharedDocumentScene(props: Props) {
-  const { ui } = useStores();
+  const { ui, auth } = useStores();
   const theme = useTheme();
   const location = useLocation();
+  const searchParams = React.useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search]
+  );
+  const { t, i18n } = useTranslation();
   const [response, setResponse] = React.useState<Response>();
   const [error, setError] = React.useState<Error | null | undefined>();
   const { documents } = useStores();
   const { shareId, documentSlug } = props.match.params;
   const documentId = useDocumentId(documentSlug, response);
+  const can = usePolicy(response?.document.id ?? "");
+
+  React.useEffect(() => {
+    if (!auth.user) {
+      changeLanguage(detectLanguage(), i18n);
+    }
+  }, [auth, i18n]);
 
   // ensure the wider page color always matches the theme
   React.useEffect(() => {
@@ -111,7 +130,22 @@ function SharedDocumentScene(props: Props) {
       return <ErrorOffline />;
     } else if (error instanceof AuthorizationError) {
       setCookie("postLoginRedirectPath", props.location.pathname);
-      return <Login />;
+      return (
+        <Login>
+          {(config) =>
+            config?.name && isCloudHosted ? (
+              <Content>
+                {t(
+                  "{{ teamName }} is using Outline to share documents, please login to continue.",
+                  {
+                    teamName: config.name,
+                  }
+                )}
+              </Content>
+            ) : null
+          }
+        </Login>
+      );
     } else {
       return <Error404 />;
     }
@@ -121,8 +155,16 @@ function SharedDocumentScene(props: Props) {
     return <Loading location={props.location} />;
   }
 
-  const sidebar = response.sharedTree ? (
-    <Sidebar rootNode={response.sharedTree} shareId={shareId} />
+  if (response && searchParams.get("edit") === "true" && can.update) {
+    return <Redirect to={response.document.url} />;
+  }
+
+  const sidebar = response.sharedTree?.children.length ? (
+    <Sidebar
+      rootNode={response.sharedTree}
+      team={response.team}
+      shareId={shareId}
+    />
   ) : undefined;
 
   return (
@@ -145,5 +187,11 @@ function SharedDocumentScene(props: Props) {
     </>
   );
 }
+
+const Content = styled(Text)`
+  color: ${(props) => props.theme.textSecondary};
+  text-align: center;
+  margin-top: -8px;
+`;
 
 export default observer(SharedDocumentScene);

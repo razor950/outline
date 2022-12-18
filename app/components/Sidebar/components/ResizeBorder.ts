@@ -1,12 +1,15 @@
 import styled from "styled-components";
+import { undraggableOnDesktop } from "~/styles";
 
-const ResizeBorder = styled.div`
+const ResizeBorder = styled.div<{ dir?: "left" | "right" }>`
   position: absolute;
   top: 0;
   bottom: 0;
-  right: -1px;
+  right: ${(props) => (props.dir !== "right" ? "-1px" : "auto")};
+  left: ${(props) => (props.dir === "right" ? "-1px" : "auto")};
   width: 2px;
   cursor: col-resize;
+  ${undraggableOnDesktop()}
 
   &:hover {
     transition-delay: 500ms;
@@ -21,6 +24,7 @@ const ResizeBorder = styled.div`
     bottom: 0;
     right: -4px;
     width: 10px;
+    ${undraggableOnDesktop()}
   }
 `;
 

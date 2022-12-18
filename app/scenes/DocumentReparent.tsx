@@ -2,6 +2,7 @@ import { observer } from "mobx-react";
 import { useState } from "react";
 import * as React from "react";
 import { Trans, useTranslation } from "react-i18next";
+import { CollectionPermission } from "@shared/types";
 import Collection from "~/models/Collection";
 import Button from "~/components/Button";
 import Flex from "~/components/Flex";
@@ -38,8 +39,8 @@ function DocumentReparent({ collection, item, onSubmit, onCancel }: Props) {
   const { t } = useTranslation();
   const prevCollection = collections.get(item.collectionId);
   const accessMapping = {
-    read_write: t("view and edit access"),
-    read: t("view only access"),
+    [CollectionPermission.ReadWrite]: t("view and edit access"),
+    [CollectionPermission.Read]: t("view only access"),
     null: t("no access"),
   };
 
@@ -70,7 +71,7 @@ function DocumentReparent({ collection, item, onSubmit, onCancel }: Props) {
       <form onSubmit={handleSubmit}>
         <Text type="secondary">
           <Trans
-            defaults="Heads up – moving the document <em>{{ title }}</em> to the <em>{{ newCollectionName }}</em> collection will grant all team members <em>{{ newPermission }}</em>, they currently have {{ prevPermission }}."
+            defaults="Heads up – moving the document <em>{{ title }}</em> to the <em>{{ newCollectionName }}</em> collection will grant all members of the workspace <em>{{ newPermission }}</em>, they currently have {{ prevPermission }}."
             values={{
               title: item.title,
               prevCollectionName: prevCollection?.name,

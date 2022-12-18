@@ -1,9 +1,10 @@
 import { Pin, Event } from "@server/models";
 import { buildDocument, buildUser } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import pinDestroyer from "./pinDestroyer";
 
-beforeEach(() => flushdb());
+setupTestDatabase();
+
 describe("pinCreator", () => {
   const ip = "127.0.0.1";
 

@@ -1,10 +1,10 @@
 import { subDays } from "date-fns";
 import { WebhookDelivery } from "@server/models";
 import { buildWebhookDelivery } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import CleanupWebhookDeliveriesTask from "./CleanupWebhookDeliveriesTask";
 
-beforeEach(() => flushdb());
+setupTestDatabase();
 
 const deliveryExists = async (delivery: WebhookDelivery) => {
   const results = await WebhookDelivery.findOne({ where: { id: delivery.id } });

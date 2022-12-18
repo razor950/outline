@@ -1,113 +1,133 @@
 import passport from "@outlinewiki/koa-passport";
-import fetch from "fetch-with-proxy";
+import type { Context } from "koa";
 import Router from "koa-router";
-import { Strategy as GithubStrategy } from "passport-github2";
+import { capitalize } from "lodash";
+import { Profile } from "passport";
+import { Strategy as GitHubStrategy } from "passport-github2";
+import { slugifyDomain } from "@shared/utils/domains";
 import accountProvisioner from "@server/commands/accountProvisioner";
 import env from "@server/env";
+import {
+  GitHubAccountCreationError,
+  TeamDomainRequiredError,
+} from "@server/errors";
 import passportMiddleware from "@server/middlewares/passport";
-import { StateStore } from "@server/utils/passport";
+import { User } from "@server/models";
+import { AuthenticationResult } from "@server/types";
+import {
+  StateStore,
+  getTeamFromContext,
+  getClientFromContext,
+} from "@server/utils/passport";
 
 const router = new Router();
-const providerName = "github";
-const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
-const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
-const GITHUB_ORGANIZATION = process.env.GITHUB_ORGANIZATION;
-
-const scopes = ["read:org", "user:email"];
-
-export async function request(endpoint: string, accessToken: string) {
-  const response = await fetch(endpoint, {
-    method: "GET",
-    headers: {
-      Authorization: `token ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-  });
-
-  if (response.status === 204) {
-    return {};
-  }
-
-  return response.json();
-}
+const GITHUB = "github";
+const scopes = [
+  "user:email",
+];
 
 export const config = {
   name: "GitHub",
-  enabled: !!GITHUB_CLIENT_ID,
+  enabled: !!env.GITHUB_CLIENT_ID,
 };
 
-if (GITHUB_CLIENT_ID) {
-  if (GITHUB_ORGANIZATION === "") {
-    throw new Error("`GITHUB_ORGANIZATION` required when using GitHub.");
-  }
+type GitHubProfile = Profile & {
+  _json: {
+    email?: string;
+    avatar_url?: string;
+    company?: string;
+  };
+};
 
-  const strategy = new GithubStrategy(
-    {
-      clientID: GITHUB_CLIENT_ID,
-      clientSecret: GITHUB_CLIENT_SECRET,
-      callbackURL: `${env.URL}/auth/github.callback`,
-      passReqToCallback: true,
-      store: new StateStore(),
-      scope: scopes,
-    },
-    async function (req, accessToken, refreshToken, profile, done) {
-      try {
-        const email = profile.emails[0].value;
+if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) {
+  passport.use(
+    new GitHubStrategy(
+      {
+        clientID: env.GITHUB_CLIENT_ID,
+        clientSecret: env.GITHUB_CLIENT_SECRET,
+        callbackURL: `${env.URL}/auth/github.callback`,
+        passReqToCallback: true,
+        // @ts-expect-error StateStore
+        store: new StateStore(),
+        scope: scopes,
+      },
+      async function (
+        ctx: Context,
+        accessToken: string,
+        refreshToken: string,
+        params: {},
+        profile: GitHubProfile,
+        done: (
+          err: Error | null,
+          user: User | null,
+          result?: AuthenticationResult
+        ) => void
+      ) {
+        try {
+          // "company" is the company field in the user's GitHub profile
+          const company = profile._json.company;
+          const team = await getTeamFromContext(ctx);
+          const client = getClientFromContext(ctx);
 
-        const orgInfo = await request(
-          `https://api.github.com/orgs/${GITHUB_ORGANIZATION}`,
-          accessToken
-        );
+          // No profile company means personal GitHub account
+          // No team implies the request came from the apex domain
+          // This combination is always an error
+          if (!company && !team) {
+            const userExists = await User.count({
+              where: { email: profile._json.email.toLowerCase() },
+            });
 
-        if (orgInfo.message === "Not Found") {
-          throw new Error("Failed to retrieve organization information.");
-        }
+            // Users cannot create a team with personal GitHub accounts
+            if (!userExists) {
+              throw GitHubAccountCreationError();
+            }
 
-        // Verify if you are member of this orgnaization
-        const isMember = await request(
-          `https://api.github.com/orgs/${GITHUB_ORGANIZATION}/members/${profile.username}`,
-          accessToken
-        );
+            // To log-in with a personal account, users must specify a team subdomain
+            throw TeamDomainRequiredError();
+          }
 
-        if (isMember.message === "Not Found") {
-          throw new Error("User not a member of the organization.");
-        }
+          // remove the TLD and form a subdomain from the remaining
+          // subdomains of the form "foo.bar.com" are allowed as company names on GitHub
+          const subdomain = company ? slugifyDomain(company) : "";
+          const teamName = capitalize(subdomain);
 
-        const result = await accountProvisioner({
-          ip: req.ip,
-          team: {
-            name: orgInfo.company || orgInfo.name,
-            avatarUrl: orgInfo.avatar_url,
-            subdomain: GITHUB_ORGANIZATION,
-          },
-          user: {
-            name: profile.displayName,
-            email,
-            avatarUrl: profile.photos[0].value,
-          },
-          authenticationProvider: {
-            name: providerName,
-            providerId: orgInfo.id,
-          },
-          authentication: {
-            providerId: profile.id,
+          // Request a larger size profile picture than the default by tweaking
+          // the query parameter.
+          const avatarUrl = profile._json.avatar_url.replace("=s96-c", "=s128-c");
+
+          // if a team can be inferred, we assume the user is only interested in signing into
+          // that team in particular; otherwise, we will do a best effort at finding their account
+          // or provisioning a new one (within AccountProvisioner)
+          const result = await accountProvisioner({
+            ip: ctx.ip,
+            team: {
+              teamId: team?.id,
+              name: teamName,
+              domain: company,
+              subdomain,
+            },
+            client,
+            user: {
+              email: profile._json.email.toLowerCase(),
+              avatarUrl,
+              name: profile.displayName,
+            },
+            service: GITHUB,
+            serviceId: profile.id,
             accessToken,
             refreshToken,
-            scopes,
-          },
-        });
-        return done(null, result.user, result);
-      } catch (err) {
-        return done(err, null);
+          });
+
+          return done(null, result.user, { ...result, client });
+        } catch (error) {
+          return done(error, null);
+        }
       }
-    }
+    )
   );
 
-  passport.use(strategy);
-
-  router.get("github", passport.authenticate(providerName));
-
-  router.get("github.callback", passportMiddleware(providerName));
+  router.get("github", passport.authenticate(GITHUB));
+  router.get("github.callback", passportMiddleware(GITHUB));
 }
 
 export default router;

@@ -1,9 +1,9 @@
 import GroupUser from "@server/models/GroupUser";
 import { buildGroup, buildAdmin, buildUser } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import userSuspender from "./userSuspender";
 
-beforeEach(() => flushdb());
+setupTestDatabase();
 
 describe("userSuspender", () => {
   const ip = "127.0.0.1";

@@ -5,6 +5,7 @@ import { VisuallyHidden } from "reakit/VisuallyHidden";
 import styled from "styled-components";
 import breakpoint from "styled-components-breakpoint";
 import Flex from "~/components/Flex";
+import { undraggableOnDesktop } from "~/styles";
 
 const RealTextarea = styled.textarea<{ hasIcon?: boolean }>`
   border: 0;
@@ -32,6 +33,7 @@ const RealInput = styled.input<{ hasIcon?: boolean }>`
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  ${undraggableOnDesktop()}
 
   &:disabled,
   &::placeholder {
@@ -58,11 +60,13 @@ const Wrapper = styled.div<{
   flex?: boolean;
   short?: boolean;
   minHeight?: number;
+  minWidth?: number;
   maxHeight?: number;
 }>`
   flex: ${(props) => (props.flex ? "1" : "0")};
   width: ${(props) => (props.short ? "49%" : "auto")};
   max-width: ${(props) => (props.short ? "350px" : "100%")};
+  min-width: ${({ minWidth }) => (minWidth ? `${minWidth}px` : "initial")};
   min-height: ${({ minHeight }) => (minHeight ? `${minHeight}px` : "0")};
   max-height: ${({ maxHeight }) => (maxHeight ? `${maxHeight}px` : "initial")};
 `;
@@ -96,6 +100,9 @@ export const Outline = styled(Flex)<{
   align-items: center;
   overflow: hidden;
   background: ${(props) => props.theme.background};
+
+  /* Prevents an issue where input placeholder appears in a selected style when double clicking title bar */
+  user-select: none;
 `;
 
 export const LabelText = styled.div`
@@ -173,7 +180,7 @@ class Input extends React.Component<Props> {
             {type === "textarea" ? (
               <RealTextarea
                 ref={this.props.innerRef}
-                onBlur={this.props.onBlur}
+                onBlur={this.handleBlur}
                 onFocus={this.handleFocus}
                 hasIcon={!!icon}
                 {...rest}
@@ -181,7 +188,7 @@ class Input extends React.Component<Props> {
             ) : (
               <RealInput
                 ref={this.props.innerRef}
-                onBlur={this.props.onBlur}
+                onBlur={this.handleBlur}
                 onFocus={this.handleFocus}
                 hasIcon={!!icon}
                 type={type}

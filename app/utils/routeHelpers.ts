@@ -34,6 +34,10 @@ export function profileSettingsPath(): string {
   return "/settings";
 }
 
+export function accountPreferencesPath(): string {
+  return "/settings/preferences";
+}
+
 export function groupSettingsPath(): string {
   return "/settings/groups";
 }
@@ -66,6 +70,10 @@ export function editDocumentUrl(doc: Document): string {
 
 export function documentMoveUrl(doc: Document): string {
   return `${doc.url}/move`;
+}
+
+export function documentInsightsUrl(doc: Document): string {
+  return `${doc.url}/insights`;
 }
 
 export function documentHistoryUrl(doc: Document, revisionId?: string): string {
@@ -117,6 +125,10 @@ export function searchPath(
   return `${route}${search}`;
 }
 
+export function sharedDocumentPath(shareId: string, docPath?: string) {
+  return docPath ? `/s/${shareId}${docPath}` : `/s/${shareId}`;
+}
+
 export function notFoundUrl(): string {
   return "/404";
 }
@@ -127,3 +139,5 @@ export const matchDocumentSlug =
 export const matchDocumentEdit = `/doc/${matchDocumentSlug}/edit`;
 
 export const matchDocumentHistory = `/doc/${matchDocumentSlug}/history/:revisionId?`;
+
+export const matchDocumentInsights = `/doc/${matchDocumentSlug}/insights`;

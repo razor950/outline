@@ -20,7 +20,7 @@ import User from "./User";
 import IdModel from "./base/IdModel";
 import Fix from "./decorators/Fix";
 
-@Table({ tableName: "events", modelName: "event" })
+@Table({ tableName: "events", modelName: "event", updatedAt: false })
 @Fix
 class Event extends IdModel {
   @IsUUID(4)
@@ -103,10 +103,9 @@ class Event extends IdModel {
    */
   static schedule(event: Partial<Event>) {
     const now = new Date();
-    globalEventQueue.add(
+    return globalEventQueue.add(
       this.build({
         createdAt: now,
-        updatedAt: now,
         ...event,
       })
     );
@@ -172,8 +171,10 @@ class Event extends IdModel {
     "users.suspend",
     "users.activate",
     "users.delete",
-    "webhook_subscriptions.create",
-    "webhook_subscriptions.delete",
+    "fileOperations.create",
+    "fileOperations.delete",
+    "webhookSubscriptions.create",
+    "webhookSubscriptions.delete",
   ];
 }
 

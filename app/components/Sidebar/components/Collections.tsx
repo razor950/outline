@@ -8,7 +8,6 @@ import Collection from "~/models/Collection";
 import Flex from "~/components/Flex";
 import Error from "~/components/List/Error";
 import PaginatedList from "~/components/PaginatedList";
-import Text from "~/components/Text";
 import { createCollection } from "~/actions/definitions/collections";
 import useStores from "~/hooks/useStores";
 import DraggableCollectionLink from "./DraggableCollectionLink";
@@ -44,6 +43,10 @@ function Collections() {
     }),
   });
 
+  React.useEffect(() => {
+    collections.fetchPage({ limit: 100 });
+  }, [collections]);
+
   return (
     <Flex column>
       <Header id="collections" title={t("Collections")}>
@@ -51,8 +54,6 @@ function Collections() {
           <PaginatedList
             aria-label={t("Collections")}
             items={collections.orderedData}
-            fetch={collections.fetchPage}
-            options={{ limit: 100 }}
             loading={<PlaceholderCollections />}
             heading={
               isDraggingAnyCollection ? (
@@ -62,11 +63,6 @@ function Collections() {
                   position="top"
                 />
               ) : undefined
-            }
-            empty={
-              <Empty type="tertiary" size="small">
-                {t("Empty")}
-              </Empty>
             }
             renderError={(props) => <StyledError {...props} />}
             renderItem={(item: Collection, index) => (
@@ -78,21 +74,13 @@ function Collections() {
                 belowCollection={orderedCollections[index + 1]}
               />
             )}
-          >
-            <SidebarAction action={createCollection} depth={0} />
-          </PaginatedList>
+          />
+          <SidebarAction action={createCollection} depth={0} />
         </Relative>
       </Header>
     </Flex>
   );
 }
-
-const Empty = styled(Text)`
-  margin-left: 36px;
-  margin-bottom: 0;
-  line-height: 34px;
-  font-style: italic;
-`;
 
 const StyledError = styled(Error)`
   font-size: 15px;

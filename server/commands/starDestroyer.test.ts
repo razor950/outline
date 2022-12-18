@@ -1,9 +1,9 @@
 import { Star, Event } from "@server/models";
 import { buildDocument, buildUser } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import starDestroyer from "./starDestroyer";
 
-beforeEach(() => flushdb());
+setupTestDatabase();
 
 describe("starDestroyer", () => {
   const ip = "127.0.0.1";

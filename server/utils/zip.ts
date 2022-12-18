@@ -3,10 +3,12 @@ import path from "path";
 import JSZip, { JSZipObject } from "jszip";
 import { find } from "lodash";
 import tmp from "tmp";
+import { ValidationError } from "@server/errors";
 import Logger from "@server/logging/Logger";
 import Attachment from "@server/models/Attachment";
 import Collection from "@server/models/Collection";
 import Document from "@server/models/Document";
+import DocumentHelper from "@server/models/helpers/DocumentHelper";
 import { NavigationNode } from "~/types";
 import { deserializeFilename, serializeFilename } from "./fs";
 import parseAttachmentIds from "./parseAttachmentIds";
@@ -35,7 +37,7 @@ async function addDocumentTreeToArchive(
       continue;
     }
 
-    let text = document.toMarkdown();
+    let text = DocumentHelper.toMarkdown(document);
     const attachments = await Attachment.findAll({
       where: {
         teamId: document.teamId,
@@ -193,8 +195,19 @@ export type FileTreeNode = {
  * @param paths An array of paths to files in the zip
  * @returns
  */
-export function zipAsFileTree(zip: JSZip) {
-  const paths = Object.keys(zip.files).map((filePath) => `/${filePath}`);
+export function zipAsFileTree(
+  zip: JSZip,
+  /** The maximum number of files to unzip */
+  maxFiles = 10000
+) {
+  let fileCount = 0;
+  const paths = Object.keys(zip.files).map((filePath) => {
+    if (++fileCount > maxFiles) {
+      throw ValidationError("Too many files in zip");
+    }
+
+    return `/${filePath}`;
+  });
   const tree: FileTreeNode[] = [];
 
   paths.forEach(function (filePath) {

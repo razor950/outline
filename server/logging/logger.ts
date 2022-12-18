@@ -3,7 +3,7 @@ import chalk from "chalk";
 import { isEmpty } from "lodash";
 import winston from "winston";
 import env from "@server/env";
-import Metrics from "@server/logging/metrics";
+import Metrics from "@server/logging/Metrics";
 import Sentry from "@server/logging/sentry";
 import * as Tracing from "./tracing";
 
@@ -11,7 +11,7 @@ const isProduction = env.ENVIRONMENT === "production";
 
 type LogCategory =
   | "lifecycle"
-  | "hocuspocus"
+  | "multiplayer"
   | "http"
   | "commands"
   | "worker"
@@ -77,7 +77,7 @@ class Logger {
 
     if (env.SENTRY_DSN) {
       Sentry.withScope(function (scope) {
-        scope.setLevel(Sentry.Severity.Warning);
+        scope.setLevel("warning");
 
         for (const key in extra) {
           scope.setExtra(key, extra[key]);
@@ -110,12 +110,14 @@ class Logger {
     extra?: Extra,
     request?: IncomingMessage
   ) {
-    Metrics.increment("logger.error");
+    Metrics.increment("logger.error", {
+      name: error.name,
+    });
     Tracing.setError(error);
 
     if (env.SENTRY_DSN) {
       Sentry.withScope(function (scope) {
-        scope.setLevel(Sentry.Severity.Error);
+        scope.setLevel("error");
 
         for (const key in extra) {
           scope.setExtra(key, extra[key]);

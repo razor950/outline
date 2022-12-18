@@ -1,4 +1,6 @@
+import crypto from "crypto";
 import { bool } from "aws-sdk/clients/signer";
+import { isEmpty } from "lodash";
 import {
   Column,
   Table,
@@ -7,15 +9,32 @@ import {
   NotEmpty,
   DataType,
   IsUrl,
+  BeforeCreate,
+  DefaultScope,
+  AllowNull,
 } from "sequelize-typescript";
 import { SaveOptions } from "sequelize/types";
+import { WebhookSubscriptionValidation } from "@shared/validations";
+import { ValidationError } from "@server/errors";
 import { Event } from "@server/types";
 import Team from "./Team";
 import User from "./User";
 import ParanoidModel from "./base/ParanoidModel";
+import Encrypted, {
+  setEncryptedColumn,
+  getEncryptedColumn,
+} from "./decorators/Encrypted";
 import Fix from "./decorators/Fix";
 import Length from "./validators/Length";
 
+@DefaultScope(() => ({
+  include: [
+    {
+      association: "team",
+      required: true,
+    },
+  ],
+}))
 @Table({
   tableName: "webhook_subscriptions",
   modelName: "webhook_subscription",
@@ -39,6 +58,21 @@ class WebhookSubscription extends ParanoidModel {
   @Column(DataType.ARRAY(DataType.STRING))
   events: string[];
 
+  @AllowNull
+  @Encrypted
+  @Column(DataType.BLOB)
+  get secret() {
+    const val = getEncryptedColumn(this, "secret");
+    // Turns out that `val` evals to `{}` instead
+    // of `null` even if secret's value in db is `null`.
+    // https://github.com/defunctzombie/sequelize-encrypted/blob/c3854e76ae4b80318c8f10f94e6c898c67659ca6/index.js#L30-L33 explains it possibly.
+    return isEmpty(val) ? "" : val;
+  }
+
+  set secret(value: string) {
+    setEncryptedColumn(this, "secret", value);
+  }
+
   // associations
 
   @BelongsTo(() => User, "createdById")
@@ -55,18 +89,39 @@ class WebhookSubscription extends ParanoidModel {
   @Column
   teamId: string;
 
+  // hooks
+
+  @BeforeCreate
+  static async checkLimit(model: WebhookSubscription) {
+    const count = await this.count({
+      where: { teamId: model.teamId },
+    });
+    if (count >= WebhookSubscriptionValidation.maxSubscriptions) {
+      throw ValidationError(
+        `You have reached the limit of ${WebhookSubscriptionValidation.maxSubscriptions} webhooks`
+      );
+    }
+  }
+
   // methods
 
   /**
    * Disables the webhook subscription
    *
    * @param options Save options
-   * @returns Promise<void>
+   * @returns Promise<WebhookSubscription>
    */
   public async disable(options?: SaveOptions<WebhookSubscription>) {
     return this.update({ enabled: false }, options);
   }
 
+  /**
+   * Determines if an event should be processed for this webhook subscription
+   * based on the event configuration.
+   *
+   * @param event Event to ceck
+   * @returns true if event is valid
+   */
   public validForEvent = (event: Event): bool => {
     if (this.events.length === 1 && this.events[0] === "*") {
       return true;
@@ -79,6 +134,28 @@ class WebhookSubscription extends ParanoidModel {
     }
 
     return false;
+  };
+
+  /**
+   * Calculates the signature for a webhook payload if the webhook subscription
+   * has an associated secret stored.
+   *
+   * @param payload The text payload of a webhook delivery
+   * @returns the signature as a string
+   */
+  public signature = (payload: string) => {
+    if (isEmpty(this.secret)) {
+      return;
+    }
+
+    const signTimestamp = Date.now();
+
+    const signature = crypto
+      .createHmac("sha256", this.secret)
+      .update(`${signTimestamp}.${payload}`)
+      .digest("hex");
+
+    return `t=${signTimestamp},s=${signature}`;
   };
 }
 

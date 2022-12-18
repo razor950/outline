@@ -1,11 +1,6 @@
-import TestServer from "fetch-test-server";
-import webService from "@server/services/web";
-import { flushdb, seed } from "@server/test/support";
+import { seed, getTestServer } from "@server/test/support";
 
-const app = webService();
-const server = new TestServer(app.callback());
-beforeEach(() => flushdb());
-afterAll(() => server.close());
+const server = getTestServer();
 
 describe("#pagination", () => {
   it("should allow offset and limit", async () => {

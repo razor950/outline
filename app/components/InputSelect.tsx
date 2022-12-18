@@ -8,12 +8,18 @@ import {
 import { CheckmarkIcon } from "outline-icons";
 import * as React from "react";
 import { VisuallyHidden } from "reakit/VisuallyHidden";
-import scrollIntoView from "smooth-scroll-into-view-if-needed";
 import styled, { css } from "styled-components";
 import Button, { Inner } from "~/components/Button";
 import Text from "~/components/Text";
 import useMenuHeight from "~/hooks/useMenuHeight";
-import { Position, Background, Backdrop, Placement } from "./ContextMenu";
+import useMobile from "~/hooks/useMobile";
+import { fadeAndScaleIn } from "~/styles/animations";
+import {
+  Position,
+  Background as ContextMenuBackground,
+  Backdrop,
+  Placement,
+} from "./ContextMenu";
 import { MenuAnchorCSS } from "./ContextMenu/MenuItem";
 import { LabelText } from "./Input";
 
@@ -72,16 +78,25 @@ const InputSelect = (props: Props) => {
     disabled,
   });
 
+  const isMobile = useMobile();
   const previousValue = React.useRef<string | null>(value);
-  const contentRef = React.useRef<HTMLDivElement>(null);
   const selectedRef = React.useRef<HTMLDivElement>(null);
   const buttonRef = React.useRef<HTMLButtonElement>(null);
-  const [offset, setOffset] = React.useState(0);
+  const contentRef = React.useRef<HTMLDivElement>(null);
   const minWidth = buttonRef.current?.offsetWidth || 0;
-  const maxHeight = useMenuHeight(
+  const margin = 8;
+  const menuMaxHeight = useMenuHeight(
     select.visible,
-    select.unstable_disclosureRef
+    select.unstable_disclosureRef,
+    margin
   );
+  const maxHeight = Math.min(
+    menuMaxHeight ?? 0,
+    window.innerHeight -
+      (buttonRef.current?.getBoundingClientRect().bottom ?? 0) -
+      margin
+  );
+
   const wrappedLabel = <LabelText>{label}</LabelText>;
   const selectedValueIndex = options.findIndex(
     (option) => option.value === select.selectedValue
@@ -100,26 +115,15 @@ const InputSelect = (props: Props) => {
     load();
   }, [onChange, select.selectedValue]);
 
-  // Ensure selected option is visible when opening the input
-  React.useEffect(() => {
-    if (!select.animating && selectedRef.current) {
-      scrollIntoView(selectedRef.current, {
-        scrollMode: "if-needed",
-        behavior: "auto",
-        block: "start",
-      });
-    }
-  }, [select.animating]);
-
   React.useLayoutEffect(() => {
     if (select.visible) {
-      const offset = Math.round(
-        (selectedRef.current?.getBoundingClientRect().top || 0) -
-          (contentRef.current?.getBoundingClientRect().top || 0)
-      );
-      setOffset(offset);
+      requestAnimationFrame(() => {
+        if (contentRef.current) {
+          contentRef.current.scrollTop = selectedValueIndex * 32;
+        }
+      });
     }
-  }, [select.visible]);
+  }, [select.visible, selectedValueIndex]);
 
   return (
     <>
@@ -152,16 +156,8 @@ const InputSelect = (props: Props) => {
               placement: Placement;
             }
           ) => {
-            if (!props.style) {
-              props.style = {};
-            }
-            const topAnchor = props.style.top === "0";
+            const topAnchor = props.style?.top === "0";
             const rightAnchor = props.placement === "bottom-end";
-
-            // offset top of select to place selected item under the cursor
-            if (selectedValueIndex !== -1) {
-              props.style.top = `-${offset + 32}px`;
-            }
 
             return (
               <Positioner {...props}>
@@ -170,6 +166,7 @@ const InputSelect = (props: Props) => {
                   ref={contentRef}
                   topAnchor={topAnchor}
                   rightAnchor={rightAnchor}
+                  hiddenScrollbars
                   style={
                     maxHeight && topAnchor
                       ? {
@@ -211,10 +208,14 @@ const InputSelect = (props: Props) => {
           {note}
         </Text>
       )}
-      {select.visible && <Backdrop />}
+      {select.visible && isMobile && <Backdrop />}
     </>
   );
 };
+
+const Background = styled(ContextMenuBackground)`
+  animation: ${fadeAndScaleIn} 200ms ease;
+`;
 
 const Placeholder = styled.span`
   color: ${(props) => props.theme.placeholder};
@@ -277,7 +278,7 @@ const Positioner = styled(Position)`
         color: ${(props) => props.theme.white};
         background: ${(props) => props.theme.primary};
         box-shadow: none;
-        cursor: pointer;
+        cursor: var(--pointer);
 
         svg {
           fill: ${(props) => props.theme.white};

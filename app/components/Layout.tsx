@@ -15,12 +15,17 @@ import { isModKey } from "~/utils/keyboard";
 type Props = {
   title?: string;
   sidebar?: React.ReactNode;
-  rightRail?: React.ReactNode;
+  sidebarRight?: React.ReactNode;
 };
 
-const Layout: React.FC<Props> = ({ title, children, sidebar, rightRail }) => {
+const Layout: React.FC<Props> = ({
+  title,
+  children,
+  sidebar,
+  sidebarRight,
+}) => {
   const { ui } = useStores();
-  const sidebarCollapsed = !sidebar || ui.isEditing || ui.sidebarCollapsed;
+  const sidebarCollapsed = !sidebar || ui.sidebarIsClosed;
 
   useKeyDown(".", (event) => {
     if (isModKey(event)) {
@@ -60,7 +65,7 @@ const Layout: React.FC<Props> = ({ title, children, sidebar, rightRail }) => {
           {children}
         </Content>
 
-        {rightRail}
+        {sidebarRight}
       </Container>
     </Container>
   );

@@ -4,12 +4,13 @@ import auth from "@server/middlewares/authentication";
 import { Team, NotificationSetting } from "@server/models";
 import { authorize } from "@server/policies";
 import { presentNotificationSetting } from "@server/presenters";
+import { ContextWithState } from "@server/types";
 import { assertPresent, assertUuid } from "@server/validation";
 
 const router = new Router();
 
 router.post("notificationSettings.create", auth(), async (ctx) => {
-  const { event } = ctx.body;
+  const { event } = ctx.request.body;
   assertPresent(event, "event is required");
 
   const { user } = ctx.state;
@@ -41,7 +42,7 @@ router.post("notificationSettings.list", auth(), async (ctx) => {
 });
 
 router.post("notificationSettings.delete", auth(), async (ctx) => {
-  const { id } = ctx.body;
+  const { id } = ctx.request.body;
   assertUuid(id, "id is required");
 
   const { user } = ctx.state;
@@ -55,8 +56,13 @@ router.post("notificationSettings.delete", auth(), async (ctx) => {
   };
 });
 
-router.post("notificationSettings.unsubscribe", async (ctx) => {
-  const { id, token } = ctx.body;
+const handleUnsubscribe = async (ctx: ContextWithState) => {
+  const { id, token } = (ctx.method === "POST"
+    ? ctx.request.body
+    : ctx.request.query) as {
+    id?: string;
+    token?: string;
+  };
   assertUuid(id, "id is required");
   assertPresent(token, "token is required");
 
@@ -77,6 +83,9 @@ router.post("notificationSettings.unsubscribe", async (ctx) => {
   }
 
   ctx.redirect(`${env.URL}?notice=invalid-auth`);
-});
+};
+
+router.get("notificationSettings.unsubscribe", handleUnsubscribe);
+router.post("notificationSettings.unsubscribe", handleUnsubscribe);
 
 export default router;

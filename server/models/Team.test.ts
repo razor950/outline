@@ -1,7 +1,7 @@
 import { buildTeam, buildCollection } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 
-beforeEach(() => flushdb());
+setupTestDatabase();
 
 describe("collectionIds", () => {
   it("should return non-private collection ids", async () => {

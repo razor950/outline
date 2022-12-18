@@ -7,13 +7,16 @@ import {
   buildTeam,
   buildDocument,
 } from "@server/test/factories";
-import { flushdb, seed } from "@server/test/support";
+import { setupTestDatabase, seed } from "@server/test/support";
 import slugify from "@server/utils/slugify";
 import Collection from "./Collection";
 import Document from "./Document";
 
-beforeEach(() => flushdb());
-beforeEach(jest.resetAllMocks);
+setupTestDatabase();
+
+beforeEach(() => {
+  jest.resetAllMocks();
+});
 
 describe("#url", () => {
   test("should return correct url for the collection", () => {

@@ -1,13 +1,8 @@
-import TestServer from "fetch-test-server";
 import { Event } from "@server/models";
-import webService from "@server/services/web";
 import { buildUser, buildAdmin, buildGroup } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { getTestServer } from "@server/test/support";
 
-const app = webService();
-const server = new TestServer(app.callback());
-beforeEach(() => flushdb());
-afterAll(() => server.close());
+const server = getTestServer();
 
 describe("#groups.create", () => {
   it("should create a group", async () => {

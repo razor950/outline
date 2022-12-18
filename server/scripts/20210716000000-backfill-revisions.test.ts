@@ -1,9 +1,9 @@
 import { Revision, Event } from "@server/models";
 import { buildDocument } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import script from "./20210716000000-backfill-revisions";
 
-beforeEach(() => flushdb());
+setupTestDatabase();
 
 describe("#work", () => {
   it("should create events for revisions", async () => {

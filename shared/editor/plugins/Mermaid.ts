@@ -53,6 +53,7 @@ function getNewState({
 
         if (pluginState.diagramVisibility[diagramId] === false) {
           diagramWrapper.classList.add("diagram-hidden");
+          return diagramWrapper;
         }
 
         import(
@@ -64,9 +65,7 @@ function getNewState({
             flowchart: {
               htmlLabels: false,
             },
-            themeVariables: {
-              fontFamily: "inherit",
-            },
+            fontFamily: "inherit",
           });
           try {
             module.default.render(

@@ -17,27 +17,32 @@ module.exports = {
   module: {
     rules: [
       {
-       test: /\.[jt]sx?$/,
-       loader: 'babel-loader',
-       exclude: [
-         path.join(__dirname, 'node_modules')
-       ],
-       include: [
-         path.join(__dirname, 'app'),
-         path.join(__dirname, 'shared'),
-       ],
-       options: {
-         cacheDirectory: true
-       }
+        test: /\.[jt]sx?$/,
+        loader: 'babel-loader',
+        exclude: [
+          path.join(__dirname, 'node_modules')
+        ],
+        include: [
+          path.join(__dirname, 'app'),
+          path.join(__dirname, 'shared'),
+        ],
+        options: {
+          cacheDirectory: true
+        }
       },
       // inline base64 URLs for <=8k images, direct URLs for the rest
       { test: /\.(png|jpg|svg)$/, loader: 'url-loader' },
       {
-       test: /\.woff$/,
-       loader: 'url-loader?limit=1&mimetype=application/font-woff&name=public/fonts/[name].[ext]',
+        test: /\.(woff|woff2|ttf|eot)$/,
+        loader:
+          'url-loader?limit=1&mimetype=application/font-woff&name=public/fonts/[name].[ext]',
       },
       { test: /\.md/, loader: 'raw-loader' },
-    ]
+      {
+        test: /\.css$/i,
+        use: ['style-loader', 'css-loader'],
+      },
+    ],
   },
   resolve: {
     extensions: ['.ts', '.tsx', '.js', '.json'],
@@ -69,7 +74,7 @@ module.exports = {
       display: "standalone",
       icons: [
         {
-          src: path.resolve("public/icon-512.png"),
+          src: path.resolve("public/images/icon-512.png"),
           // For Chrome, you must provide at least a 192x192 pixel icon, and a 512x512 pixel icon.
           // If only those two icon sizes are provided, Chrome will automatically scale the icons
           // to fit the device. If you'd prefer to scale your own icons, and adjust them for

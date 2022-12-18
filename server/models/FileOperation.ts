@@ -1,3 +1,4 @@
+import { Op, WhereOptions } from "sequelize";
 import {
   ForeignKey,
   DefaultScope,
@@ -49,15 +50,13 @@ export enum FileOperationState {
 @Table({ tableName: "file_operations", modelName: "file_operation" })
 @Fix
 class FileOperation extends IdModel {
-  @Column(DataType.ENUM("import", "export"))
+  @Column(DataType.ENUM(...Object.values(FileOperationType)))
   type: FileOperationType;
 
   @Column(DataType.STRING)
   format: FileOperationFormat;
 
-  @Column(
-    DataType.ENUM("creating", "uploading", "complete", "error", "expired")
-  )
+  @Column(DataType.ENUM(...Object.values(FileOperationState)))
   state: FileOperationState;
 
   @Column
@@ -74,7 +73,13 @@ class FileOperation extends IdModel {
 
   expire = async function () {
     this.state = "expired";
-    await deleteFromS3(this.key);
+    try {
+      await deleteFromS3(this.key);
+    } catch (err) {
+      if (err.retryable) {
+        throw err;
+      }
+    }
     await this.save();
   };
 
@@ -111,6 +116,30 @@ class FileOperation extends IdModel {
   @ForeignKey(() => Collection)
   @Column(DataType.UUID)
   collectionId: string;
+
+  /**
+   * Count the number of export file operations for a given team after a point
+   * in time.
+   *
+   * @param teamId The team id
+   * @param startDate The start time
+   * @returns The number of file operations
+   */
+  static async countExportsAfterDateTime(
+    teamId: string,
+    startDate: Date,
+    where: WhereOptions<FileOperation> = {}
+  ): Promise<number> {
+    return this.count({
+      where: {
+        teamId,
+        createdAt: {
+          [Op.gt]: startDate,
+        },
+        ...where,
+      },
+    });
+  }
 }
 
 export default FileOperation;

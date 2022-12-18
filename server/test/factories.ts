@@ -1,4 +1,6 @@
+import { isNull } from "lodash";
 import { v4 as uuidv4 } from "uuid";
+import { CollectionPermission } from "@shared/types";
 import {
   Share,
   Team,
@@ -17,6 +19,7 @@ import {
   WebhookSubscription,
   WebhookDelivery,
   ApiKey,
+  Subscription,
 } from "@server/models";
 import {
   FileOperationState,
@@ -88,6 +91,31 @@ export async function buildStar(overrides: Partial<Star> = {}) {
   });
 }
 
+export async function buildSubscription(overrides: Partial<Subscription> = {}) {
+  let user;
+
+  if (overrides.userId) {
+    user = await User.findByPk(overrides.userId);
+  } else {
+    user = await buildUser();
+    overrides.userId = user.id;
+  }
+
+  if (!overrides.documentId) {
+    const document = await buildDocument({
+      createdById: overrides.userId,
+      teamId: user?.teamId,
+    });
+    overrides.documentId = document.id;
+  }
+
+  return Subscription.create({
+    enabled: true,
+    event: "documents.update",
+    ...overrides,
+  });
+}
+
 export function buildTeam(overrides: Record<string, any> = {}) {
   count++;
   return Team.create(
@@ -148,7 +176,7 @@ export async function buildUser(overrides: Partial<User> = {}) {
     },
   });
   count++;
-  return User.create(
+  const user = await User.create(
     {
       email: `user${count}@example.com`,
       name: `User ${count}`,
@@ -168,6 +196,11 @@ export async function buildUser(overrides: Partial<User> = {}) {
       include: "authentications",
     }
   );
+
+  if (team) {
+    user.team = team;
+  }
+  return user;
 }
 
 export async function buildAdmin(overrides: Partial<User> = {}) {
@@ -217,6 +250,7 @@ export async function buildIntegration(overrides: Partial<Integration> = {}) {
   return Integration.create({
     type: "post",
     service: "slack",
+    events: ["documents.update", "documents.publish"],
     settings: {
       serviceTeamId: "slack_team_id",
     },
@@ -245,7 +279,7 @@ export async function buildCollection(
     name: `Test Collection ${count}`,
     description: "Test collection description",
     createdById: overrides.userId,
-    permission: "read_write",
+    permission: CollectionPermission.ReadWrite,
     ...overrides,
   });
 }
@@ -295,8 +329,22 @@ export async function buildGroupUser(
   });
 }
 
-export async function buildDocument(
+export async function buildDraftDocument(
   overrides: Partial<Document> & { userId?: string } = {}
+) {
+  return buildDocument({ ...overrides, collectionId: null });
+}
+
+export async function buildDocument(
+  // Omission first, addition later?
+  // This is actually a workaround to allow
+  // passing collectionId as null. Ideally, it
+  // should be updated in the Document model itself
+  // but that'd cascade and require further changes
+  // beyond the scope of what's required now
+  overrides: Omit<Partial<Document>, "collectionId"> & { userId?: string } & {
+    collectionId?: string | null;
+  } = {}
 ) {
   if (!overrides.teamId) {
     const team = await buildTeam();
@@ -308,7 +356,7 @@ export async function buildDocument(
     overrides.userId = user.id;
   }
 
-  if (!overrides.collectionId) {
+  if (overrides.collectionId === undefined) {
     const collection = await buildCollection({
       teamId: overrides.teamId,
       userId: overrides.userId,
@@ -320,7 +368,7 @@ export async function buildDocument(
   return Document.create({
     title: `Document ${count}`,
     text: "This is the text in an example document",
-    publishedAt: new Date(),
+    publishedAt: isNull(overrides.collectionId) ? null : new Date(),
     lastModifiedById: overrides.userId,
     createdById: overrides.userId,
     ...overrides,
@@ -377,7 +425,6 @@ export async function buildAttachment(overrides: Partial<Attachment> = {}) {
   count++;
   return Attachment.create({
     key: `uploads/key/to/file ${count}.png`,
-    url: `https://redirect.url.com/uploads/key/to/file${count}.png`,
     contentType: "image/png",
     size: 100,
     acl: "public-read",

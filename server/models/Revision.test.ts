@@ -1,9 +1,8 @@
 import { buildDocument } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import Revision from "./Revision";
 
-beforeEach(() => flushdb());
-beforeEach(jest.resetAllMocks);
+setupTestDatabase();
 
 describe("#findLatest", () => {
   test("should return latest revision", async () => {

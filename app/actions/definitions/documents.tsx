@@ -11,14 +11,32 @@ import {
   ImportIcon,
   PinIcon,
   SearchIcon,
+  UnsubscribeIcon,
+  SubscribeIcon,
+  MoveIcon,
+  TrashIcon,
+  CrossIcon,
+  ArchiveIcon,
+  ShuffleIcon,
+  HistoryIcon,
+  LightBulbIcon,
 } from "outline-icons";
 import * as React from "react";
 import { getEventFiles } from "@shared/utils/files";
+import DocumentDelete from "~/scenes/DocumentDelete";
+import DocumentMove from "~/scenes/DocumentMove";
+import DocumentPermanentDelete from "~/scenes/DocumentPermanentDelete";
 import DocumentTemplatizeDialog from "~/components/DocumentTemplatizeDialog";
 import { createAction } from "~/actions";
 import { DocumentSection } from "~/actions/sections";
 import history from "~/utils/history";
-import { homePath, newDocumentPath, searchPath } from "~/utils/routeHelpers";
+import {
+  documentInsightsUrl,
+  documentHistoryUrl,
+  homePath,
+  newDocumentPath,
+  searchPath,
+} from "~/utils/routeHelpers";
 
 export const openDocument = createAction({
   name: ({ t }) => t("Open document"),
@@ -108,12 +126,74 @@ export const unstarDocument = createAction({
   },
 });
 
-export const downloadDocument = createAction({
-  name: ({ t, isContextMenu }) =>
-    isContextMenu ? t("Download") : t("Download document"),
+export const subscribeDocument = createAction({
+  name: ({ t }) => t("Subscribe"),
   section: DocumentSection,
+  icon: <SubscribeIcon />,
+  visible: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return false;
+    }
+
+    const document = stores.documents.get(activeDocumentId);
+
+    return (
+      !document?.isSubscribed &&
+      stores.policies.abilities(activeDocumentId).subscribe
+    );
+  },
+  perform: ({ activeDocumentId, stores, t }) => {
+    if (!activeDocumentId) {
+      return;
+    }
+
+    const document = stores.documents.get(activeDocumentId);
+
+    document?.subscribe();
+
+    stores.toasts.showToast(t("Subscribed to document notifications"), {
+      type: "success",
+    });
+  },
+});
+
+export const unsubscribeDocument = createAction({
+  name: ({ t }) => t("Unsubscribe"),
+  section: DocumentSection,
+  icon: <UnsubscribeIcon />,
+  visible: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return false;
+    }
+
+    const document = stores.documents.get(activeDocumentId);
+
+    return (
+      !!document?.isSubscribed &&
+      stores.policies.abilities(activeDocumentId).unsubscribe
+    );
+  },
+  perform: ({ activeDocumentId, stores, currentUserId, t }) => {
+    if (!activeDocumentId || !currentUserId) {
+      return;
+    }
+
+    const document = stores.documents.get(activeDocumentId);
+
+    document?.unsubscribe(currentUserId);
+
+    stores.toasts.showToast(t("Unsubscribed from document notifications"), {
+      type: "success",
+    });
+  },
+});
+
+export const downloadDocumentAsHTML = createAction({
+  name: ({ t }) => t("HTML"),
+  section: DocumentSection,
+  keywords: "html export",
   icon: <DownloadIcon />,
-  keywords: "export",
+  iconInContextMenu: false,
   visible: ({ activeDocumentId, stores }) =>
     !!activeDocumentId && stores.policies.abilities(activeDocumentId).download,
   perform: ({ activeDocumentId, stores }) => {
@@ -122,8 +202,35 @@ export const downloadDocument = createAction({
     }
 
     const document = stores.documents.get(activeDocumentId);
-    document?.download();
+    document?.download("text/html");
   },
+});
+
+export const downloadDocumentAsMarkdown = createAction({
+  name: ({ t }) => t("Markdown"),
+  section: DocumentSection,
+  keywords: "md markdown export",
+  icon: <DownloadIcon />,
+  iconInContextMenu: false,
+  visible: ({ activeDocumentId, stores }) =>
+    !!activeDocumentId && stores.policies.abilities(activeDocumentId).download,
+  perform: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return;
+    }
+
+    const document = stores.documents.get(activeDocumentId);
+    document?.download("text/markdown");
+  },
+});
+
+export const downloadDocument = createAction({
+  name: ({ t, isContextMenu }) =>
+    isContextMenu ? t("Download") : t("Download document"),
+  section: DocumentSection,
+  icon: <DownloadIcon />,
+  keywords: "export",
+  children: [downloadDocumentAsHTML, downloadDocumentAsMarkdown],
 });
 
 export const duplicateDocument = createAction({
@@ -296,10 +403,11 @@ export const createTemplate = createAction({
       return false;
     }
     const document = stores.documents.get(activeDocumentId);
-    return (
+    return !!(
       !!activeCollectionId &&
       stores.policies.abilities(activeCollectionId).update &&
-      !document?.isTemplate
+      !document?.isTemplate &&
+      !document?.isDeleted
     );
   },
   perform: ({ activeDocumentId, stores, t, event }) => {
@@ -317,6 +425,24 @@ export const createTemplate = createAction({
   },
 });
 
+export const openRandomDocument = createAction({
+  id: "random",
+  section: DocumentSection,
+  name: ({ t }) => t(`Open random document`),
+  icon: <ShuffleIcon />,
+  perform: ({ stores, activeDocumentId }) => {
+    const documentPaths = stores.collections.pathsToDocuments.filter(
+      (path) => path.type === "document" && path.id !== activeDocumentId
+    );
+    const documentPath =
+      documentPaths[Math.round(Math.random() * documentPaths.length)];
+
+    if (documentPath) {
+      history.push(documentPath.url);
+    }
+  },
+});
+
 export const searchDocumentsForQuery = (searchQuery: string) =>
   createAction({
     id: "search",
@@ -328,16 +454,190 @@ export const searchDocumentsForQuery = (searchQuery: string) =>
     visible: ({ location }) => location.pathname !== searchPath(),
   });
 
+export const moveDocument = createAction({
+  name: ({ t }) => t("Move"),
+  section: DocumentSection,
+  icon: <MoveIcon />,
+  visible: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return false;
+    }
+    return !!stores.policies.abilities(activeDocumentId).move;
+  },
+  perform: ({ activeDocumentId, stores, t }) => {
+    if (activeDocumentId) {
+      const document = stores.documents.get(activeDocumentId);
+      if (!document) {
+        return;
+      }
+
+      stores.dialogs.openModal({
+        title: t("Move {{ documentName }}", {
+          documentName: document.noun,
+        }),
+        content: (
+          <DocumentMove
+            document={document}
+            onRequestClose={stores.dialogs.closeAllModals}
+          />
+        ),
+      });
+    }
+  },
+});
+
+export const archiveDocument = createAction({
+  name: ({ t }) => t("Archive"),
+  section: DocumentSection,
+  icon: <ArchiveIcon />,
+  visible: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return false;
+    }
+    return !!stores.policies.abilities(activeDocumentId).archive;
+  },
+  perform: async ({ activeDocumentId, stores, t }) => {
+    if (activeDocumentId) {
+      const document = stores.documents.get(activeDocumentId);
+      if (!document) {
+        return;
+      }
+
+      await document.archive();
+      stores.toasts.showToast(t("Document archived"), {
+        type: "success",
+      });
+    }
+  },
+});
+
+export const deleteDocument = createAction({
+  name: ({ t }) => t("Delete"),
+  section: DocumentSection,
+  icon: <TrashIcon />,
+  dangerous: true,
+  visible: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return false;
+    }
+    return !!stores.policies.abilities(activeDocumentId).delete;
+  },
+  perform: ({ activeDocumentId, stores, t }) => {
+    if (activeDocumentId) {
+      const document = stores.documents.get(activeDocumentId);
+      if (!document) {
+        return;
+      }
+
+      stores.dialogs.openModal({
+        title: t("Delete {{ documentName }}", {
+          documentName: document.noun,
+        }),
+        isCentered: true,
+        content: (
+          <DocumentDelete
+            document={document}
+            onSubmit={stores.dialogs.closeAllModals}
+          />
+        ),
+      });
+    }
+  },
+});
+
+export const permanentlyDeleteDocument = createAction({
+  name: ({ t }) => t("Permanently delete"),
+  section: DocumentSection,
+  icon: <CrossIcon />,
+  dangerous: true,
+  visible: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return false;
+    }
+    return !!stores.policies.abilities(activeDocumentId).permanentDelete;
+  },
+  perform: ({ activeDocumentId, stores, t }) => {
+    if (activeDocumentId) {
+      const document = stores.documents.get(activeDocumentId);
+      if (!document) {
+        return;
+      }
+
+      stores.dialogs.openModal({
+        title: t("Permanently delete {{ documentName }}", {
+          documentName: document.noun,
+        }),
+        isCentered: true,
+        content: (
+          <DocumentPermanentDelete
+            document={document}
+            onSubmit={stores.dialogs.closeAllModals}
+          />
+        ),
+      });
+    }
+  },
+});
+
+export const openDocumentHistory = createAction({
+  name: ({ t }) => t("History"),
+  section: DocumentSection,
+  icon: <HistoryIcon />,
+  visible: ({ activeDocumentId, stores }) => {
+    const can = stores.policies.abilities(activeDocumentId ?? "");
+    return !!activeDocumentId && can.read && !can.restore;
+  },
+  perform: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return;
+    }
+    const document = stores.documents.get(activeDocumentId);
+    if (!document) {
+      return;
+    }
+    history.push(documentHistoryUrl(document));
+  },
+});
+
+export const openDocumentInsights = createAction({
+  name: ({ t }) => t("Insights"),
+  section: DocumentSection,
+  icon: <LightBulbIcon />,
+  visible: ({ activeDocumentId, stores }) => {
+    const can = stores.policies.abilities(activeDocumentId ?? "");
+    return !!activeDocumentId && can.read;
+  },
+  perform: ({ activeDocumentId, stores }) => {
+    if (!activeDocumentId) {
+      return;
+    }
+    const document = stores.documents.get(activeDocumentId);
+    if (!document) {
+      return;
+    }
+    history.push(documentInsightsUrl(document));
+  },
+});
+
 export const rootDocumentActions = [
   openDocument,
+  archiveDocument,
   createDocument,
   createTemplate,
+  deleteDocument,
   importDocument,
   downloadDocument,
   starDocument,
   unstarDocument,
+  subscribeDocument,
+  unsubscribeDocument,
   duplicateDocument,
+  moveDocument,
+  openRandomDocument,
+  permanentlyDeleteDocument,
   printDocument,
   pinDocumentToCollection,
   pinDocumentToHome,
+  openDocumentHistory,
+  openDocumentInsights,
 ];

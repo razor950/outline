@@ -1,17 +1,17 @@
 import { buildUser, buildWebhookSubscription } from "@server/test/factories";
-import { flushdb } from "@server/test/support";
+import { setupTestDatabase } from "@server/test/support";
 import { UserEvent } from "@server/types";
 import DeliverWebhookTask from "../tasks/DeliverWebhookTask";
 import WebhookProcessor from "./WebhookProcessor";
 
 jest.mock("@server/queues/tasks/DeliverWebhookTask");
+const ip = "127.0.0.1";
 
-beforeEach(() => flushdb());
-beforeEach(() => {
+setupTestDatabase();
+
+beforeEach(async () => {
   jest.resetAllMocks();
 });
-
-const ip = "127.0.0.1";
 
 describe("WebhookProcessor", () => {
   test("it schedules a delivery for the event", async () => {

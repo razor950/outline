@@ -1,27 +1,30 @@
-import { sequelize } from "@server/database/sequelize";
-import env from "@server/env";
-import { DomainNotAllowedError, MaximumTeamsError } from "@server/errors";
-import Logger from "@server/logging/Logger";
+import { Transaction } from "sequelize";
+import slugify from "slugify";
+import { RESERVED_SUBDOMAINS } from "@shared/utils/domains";
 import { APM } from "@server/logging/tracing";
-import { Team, AuthenticationProvider, Event } from "@server/models";
+import { Team, Event } from "@server/models";
 import { generateAvatarUrl } from "@server/utils/avatars";
 
-type TeamCreatorResult = {
-  team: Team;
-  authenticationProvider: AuthenticationProvider;
-  isNewTeam: boolean;
-};
-
 type Props = {
+  /** The displayed name of the team */
   name: string;
+  /** The domain name from the email of the user logging in */
   domain?: string;
+  /** The preferred subdomain to provision for the team if not yet created */
   subdomain: string;
+  /** The public url of an image representing the team */
   avatarUrl?: string | null;
-  authenticationProvider: {
+  /** Details of the authentication provider being used */
+  authenticationProviders: {
+    /** The name of the authentication provider, eg "google" */
     name: string;
+    /** External identifier of the authentication provider */
     providerId: string;
-  };
+  }[];
+  /** The IP address of the incoming request */
   ip: string;
+  /** Optional transaction to be chained from outside */
+  transaction: Transaction;
 };
 
 async function teamCreator({
@@ -29,130 +32,71 @@ async function teamCreator({
   domain,
   subdomain,
   avatarUrl,
-  authenticationProvider,
+  authenticationProviders,
   ip,
-}: Props): Promise<TeamCreatorResult> {
-  let authP = await AuthenticationProvider.findOne({
-    where: authenticationProvider,
-    include: [
-      {
-        model: Team,
-        as: "team",
-        required: true,
-      },
-    ],
-  });
-
-  // This authentication provider already exists which means we have a team and
-  // there is nothing left to do but return the existing credentials
-  if (authP) {
-    return {
-      authenticationProvider: authP,
-      team: authP.team,
-      isNewTeam: false,
-    };
-  }
-
-  // This team has never been seen before, if self hosted the logic is different
-  // to the multi-tenant version, we want to restrict to a single team that MAY
-  // have multiple authentication providers
-  if (env.DEPLOYMENT !== "hosted") {
-    const team = await Team.findOne();
-
-    // If the self-hosted installation has a single team and the domain for the
-    // new team is allowed then assign the authentication provider to the
-    // existing team
-    if (team && domain) {
-      if (await team.isDomainAllowed(domain)) {
-        authP = await team.$create<AuthenticationProvider>(
-          "authenticationProvider",
-          authenticationProvider
-        );
-        return {
-          authenticationProvider: authP,
-          team,
-          isNewTeam: false,
-        };
-      } else {
-        throw DomainNotAllowedError();
-      }
-    }
-
-    throw MaximumTeamsError();
-  }
-
+  transaction,
+}: Props): Promise<Team> {
   // If the service did not provide a logo/avatar then we attempt to generate
   // one via ClearBit, or fallback to colored initials in worst case scenario
-  if (!avatarUrl) {
+  if (!avatarUrl || !avatarUrl.startsWith("http")) {
     avatarUrl = await generateAvatarUrl({
-      name,
       domain,
       id: subdomain,
     });
   }
 
-  const team = await sequelize.transaction(async (transaction) => {
-    const team = await Team.create(
-      {
-        name,
-        avatarUrl,
-        authenticationProviders: [authenticationProvider],
-      },
-      {
-        include: "authenticationProviders",
-        transaction,
-      }
-    );
+  const team = await Team.create(
+    {
+      name,
+      avatarUrl,
+      authenticationProviders,
+    },
+    {
+      include: ["authenticationProviders"],
+      transaction,
+    }
+  );
 
-    await Event.create(
-      {
-        name: "teams.create",
-        teamId: team.id,
-        ip,
-      },
-      {
-        transaction,
-      }
-    );
-
-    return team;
-  });
-
-  // Note provisioning the subdomain is done outside of the transaction as
-  // it is allowed to fail and the team can still be created, it also requires
-  // failed queries as part of iteration
-  try {
-    await provisionSubdomain(team, subdomain);
-  } catch (err) {
-    Logger.error("Provisioning subdomain failed", err, {
+  await Event.create(
+    {
+      name: "teams.create",
       teamId: team.id,
-      subdomain,
-    });
-  }
+      ip,
+    },
+    {
+      transaction,
+    }
+  );
 
-  return {
-    team,
-    authenticationProvider: team.authenticationProviders[0],
-    isNewTeam: true,
-  };
+  const availableSubdomain = await findAvailableSubdomain(team, subdomain);
+  await team.update({ subdomain: availableSubdomain }, { transaction });
+
+  return team;
 }
 
-async function provisionSubdomain(team: Team, requestedSubdomain: string) {
-  if (team.subdomain) {
-    return team.subdomain;
-  }
-  let subdomain = requestedSubdomain;
+async function findAvailableSubdomain(team: Team, requestedSubdomain: string) {
+  // filter subdomain to only valid characters
+  // if there are less than the minimum length, use a default subdomain
+  const normalizedSubdomain = slugify(requestedSubdomain, {
+    lower: true,
+    strict: true,
+  });
+  let subdomain =
+    normalizedSubdomain.length < 3 ||
+    RESERVED_SUBDOMAINS.includes(normalizedSubdomain)
+      ? "team"
+      : normalizedSubdomain;
+
   let append = 0;
 
   for (;;) {
-    try {
-      await team.update({
-        subdomain,
-      });
+    const existing = await Team.findOne({ where: { subdomain } });
+
+    if (existing) {
+      // subdomain was invalid or already used, try another
+      subdomain = `${normalizedSubdomain}${++append}`;
+    } else {
       break;
-    } catch (err) {
-      // subdomain was invalid or already used, try again
-      subdomain = `${requestedSubdomain}${++append}`;
     }
   }
 

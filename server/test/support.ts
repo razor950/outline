@@ -1,19 +1,9 @@
+import TestServer from "fetch-test-server";
 import { v4 as uuidv4 } from "uuid";
+import { CollectionPermission } from "@shared/types";
 import { sequelize } from "@server/database/sequelize";
 import { User, Document, Collection, Team } from "@server/models";
-
-const sql = sequelize.getQueryInterface();
-const tables = Object.keys(sequelize.models).map((model) => {
-  const n = sequelize.models[model].getTableName();
-  return (sql.queryGenerator as any).quoteTable(
-    typeof n === "string" ? n : n.tableName
-  );
-});
-const flushQuery = `TRUNCATE ${tables.join(", ")} CASCADE`;
-
-export function flushdb() {
-  return sequelize.query(flushQuery);
-}
+import webService from "@server/services/web";
 
 export const seed = async () => {
   return sequelize.transaction(async (transaction) => {
@@ -79,7 +69,7 @@ export const seed = async () => {
         urlId: "collection",
         teamId: team.id,
         createdById: user.id,
-        permission: "read_write",
+        permission: CollectionPermission.ReadWrite,
       },
       {
         transaction,
@@ -109,3 +99,40 @@ export const seed = async () => {
     };
   });
 };
+
+export function getTestServer() {
+  const app = webService();
+  const server = new TestServer(app.callback());
+
+  server.disconnect = async () => {
+    await sequelize.close();
+    server.close();
+  };
+
+  setupTestDatabase();
+  afterAll(server.disconnect);
+
+  return server;
+}
+
+export function setupTestDatabase() {
+  const flush = async () => {
+    const sql = sequelize.getQueryInterface();
+    const tables = Object.keys(sequelize.models).map((model) => {
+      const n = sequelize.models[model].getTableName();
+      return (sql.queryGenerator as any).quoteTable(
+        typeof n === "string" ? n : n.tableName
+      );
+    });
+    const flushQuery = `TRUNCATE ${tables.join(", ")} CASCADE`;
+
+    await sequelize.query(flushQuery);
+  };
+
+  const disconnect = async () => {
+    await sequelize.close();
+  };
+
+  afterAll(disconnect);
+  beforeEach(flush);
+}

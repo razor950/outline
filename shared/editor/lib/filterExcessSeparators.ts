@@ -1,8 +1,11 @@
-import { EmbedDescriptor, MenuItem } from "../types";
+import { EmbedDescriptor } from "../embeds";
+import { MenuItem } from "../types";
 
 type Item = MenuItem | EmbedDescriptor;
 
-export default function filterExcessSeparators(items: Item[]): Item[] {
+export default function filterExcessSeparators<T extends Item>(
+  items: T[]
+): T[] {
   return items
     .reduce((acc, item) => {
       // trim separator if the previous item was a separator
@@ -13,7 +16,7 @@ export default function filterExcessSeparators(items: Item[]): Item[] {
         return acc;
       }
       return [...acc, item];
-    }, [] as Item[])
+    }, [] as T[])
     .filter((item, index, arr) => {
       if (
         item.name === "separator" &&

@@ -1,14 +1,15 @@
-import { subMinutes } from "date-fns";
 import Router from "koa-router";
 import { find } from "lodash";
+import { Client } from "@shared/types";
 import { parseDomain } from "@shared/utils/domains";
+import { RateLimiterStrategy } from "@server/RateLimiter";
 import InviteAcceptedEmail from "@server/emails/templates/InviteAcceptedEmail";
 import SigninEmail from "@server/emails/templates/SigninEmail";
 import WelcomeEmail from "@server/emails/templates/WelcomeEmail";
 import env from "@server/env";
 import { AuthorizationError } from "@server/errors";
 import errorHandling from "@server/middlewares/errorHandling";
-import methodOverride from "@server/middlewares/methodOverride";
+import { rateLimiter } from "@server/middlewares/rateLimiter";
 import { User, Team } from "@server/models";
 import { signIn } from "@server/utils/authentication";
 import { getUserForEmailSigninToken } from "@server/utils/jwt";
@@ -21,57 +22,44 @@ export const config = {
   enabled: true,
 };
 
-router.use(methodOverride());
+router.post(
+  "email",
+  errorHandling(),
+  rateLimiter(RateLimiterStrategy.TenPerHour),
+  async (ctx) => {
+    const { email, client } = ctx.request.body;
+    assertEmail(email, "email is required");
 
-router.post("email", errorHandling(), async (ctx) => {
-  const { email } = ctx.body;
-  assertEmail(email, "email is required");
-  const users = await User.scope("withAuthentications").findAll({
-    where: {
-      email: email.toLowerCase(),
-    },
-  });
-
-  if (users.length) {
-    let team!: Team | null;
     const domain = parseDomain(ctx.request.hostname);
 
-    if (domain.custom) {
+    let team: Team | null | undefined;
+    if (env.DEPLOYMENT !== "hosted") {
+      team = await Team.scope("withAuthenticationProviders").findOne();
+    } else if (domain.custom) {
       team = await Team.scope("withAuthenticationProviders").findOne({
-        where: {
-          domain: ctx.request.hostname,
-        },
+        where: { domain: domain.host },
       });
     } else if (env.SUBDOMAINS_ENABLED && domain.teamSubdomain) {
       team = await Team.scope("withAuthenticationProviders").findOne({
-        where: {
-          subdomain: domain.teamSubdomain,
-        },
+        where: { subdomain: domain.teamSubdomain },
       });
     }
 
-    // If there are multiple users with this email address then give precedence
-    // to the one that is active on this subdomain/domain (if any)
-    let user = users.find((user) => team && user.teamId === team.id);
+    if (!team?.emailSigninEnabled) {
+      throw AuthorizationError();
+    }
 
-    // A user was found for the email address, but they don't belong to the team
-    // that this subdomain belongs to, we load their team and allow the logic to
-    // continue
+    const user = await User.scope("withAuthentications").findOne({
+      where: {
+        teamId: team.id,
+        email: email.toLowerCase(),
+      },
+    });
+
     if (!user) {
-      user = users[0];
-      team = await Team.scope("withAuthenticationProviders").findByPk(
-        user.teamId
-      );
-    }
-
-    if (!team) {
-      team = await Team.scope("withAuthenticationProviders").findByPk(
-        user.teamId
-      );
-    }
-
-    if (!team) {
-      ctx.redirect(`/?notice=auth-error`);
+      ctx.body = {
+        success: true,
+      };
       return;
     }
 
@@ -81,27 +69,12 @@ router.post("email", errorHandling(), async (ctx) => {
       const authProvider = find(team.authenticationProviders, {
         id: user.authentications[0].authenticationProviderId,
       });
-      ctx.body = {
-        redirect: `${team.url}/auth/${authProvider?.name}`,
-      };
-      return;
-    }
-
-    if (!team.emailSigninEnabled) {
-      throw AuthorizationError();
-    }
-
-    // basic rate limit of endpoint to prevent send email abuse
-    if (
-      user.lastSigninEmailSentAt &&
-      user.lastSigninEmailSentAt > subMinutes(new Date(), 2)
-    ) {
-      ctx.body = {
-        redirect: `${team.url}?notice=email-auth-ratelimit`,
-        message: "Rate limit exceeded",
-        success: false,
-      };
-      return;
+      if (authProvider?.enabled) {
+        ctx.body = {
+          redirect: `${team.url}/auth/${authProvider?.name}`,
+        };
+        return;
+      }
     }
 
     // send email to users registered address with a short-lived token
@@ -109,19 +82,20 @@ router.post("email", errorHandling(), async (ctx) => {
       to: user.email,
       token: user.getEmailSigninToken(),
       teamUrl: team.url,
+      client: client === Client.Desktop ? Client.Desktop : Client.Web,
     });
     user.lastSigninEmailSentAt = new Date();
     await user.save();
-  }
 
-  // respond with success regardless of whether an email was sent
-  ctx.body = {
-    success: true,
-  };
-});
+    // respond with success regardless of whether an email was sent
+    ctx.body = {
+      success: true,
+    };
+  }
+);
 
 router.get("email.callback", async (ctx) => {
-  const { token } = ctx.request.query;
+  const { token, client } = ctx.request.query;
   assertPresent(token, "token is required");
 
   let user!: User;
@@ -159,7 +133,13 @@ router.get("email.callback", async (ctx) => {
   }
 
   // set cookies on response and redirect to team subdomain
-  await signIn(ctx, user, user.team, "email", false, false);
+  await signIn(ctx, "email", {
+    user,
+    team: user.team,
+    isNewTeam: false,
+    isNewUser: false,
+    client: client === Client.Desktop ? Client.Desktop : Client.Web,
+  });
 });
 
 export default router;

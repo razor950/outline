@@ -8,7 +8,7 @@ import {
   AuthorizationError,
   UserSuspendedError,
 } from "../errors";
-import { ContextWithState, AuthenticationTypes } from "../types";
+import { ContextWithState, AuthenticationType } from "../types";
 
 type AuthenticationOptions = {
   /* An admin user role is required to access the route */
@@ -43,13 +43,12 @@ export default function auth(options: AuthenticationOptions = {}) {
         );
       }
     } else if (
-      ctx.body &&
-      typeof ctx.body === "object" &&
-      "token" in ctx.body
+      ctx.request.body &&
+      typeof ctx.request.body === "object" &&
+      "token" in ctx.request.body
     ) {
-      // @ts-expect-error ts-migrate(2571) FIXME: Object is of type 'unknown'.
-      token = ctx.body.token;
-    } else if (ctx.request.query.token) {
+      token = ctx.request.body.token;
+    } else if (ctx.request.query?.token) {
       token = ctx.request.query.token;
     } else {
       token = ctx.cookies.get("accessToken");
@@ -62,8 +61,8 @@ export default function auth(options: AuthenticationOptions = {}) {
     let user: User | null | undefined;
 
     if (token) {
-      if (String(token).match(/^[\w]{38}$/)) {
-        ctx.state.authType = AuthenticationTypes.API;
+      if (ApiKey.match(String(token))) {
+        ctx.state.authType = AuthenticationType.API;
         let apiKey;
 
         try {
@@ -94,7 +93,7 @@ export default function auth(options: AuthenticationOptions = {}) {
           throw AuthenticationError("Invalid API key");
         }
       } else {
-        ctx.state.authType = AuthenticationTypes.APP;
+        ctx.state.authType = AuthenticationType.APP;
         user = await getUserForJWT(String(token));
       }
 
@@ -123,7 +122,7 @@ export default function auth(options: AuthenticationOptions = {}) {
       }
 
       // not awaiting the promise here so that the request is not blocked
-      user.updateActiveAt(ctx.request.ip).catch((err) => {
+      user.updateActiveAt(ctx).catch((err) => {
         Logger.error("Failed to update user activeAt", err);
       });
 

@@ -15,7 +15,7 @@ export enum EventType {
 }
 
 export type MenuItem = {
-  icon?: typeof React.Component | React.FC<any>;
+  icon?: React.ReactElement;
   name?: string;
   title?: string;
   shortcut?: string;
@@ -25,12 +25,6 @@ export type MenuItem = {
   attrs?: Record<string, any>;
   visible?: boolean;
   active?: (state: EditorState) => boolean;
-};
-
-export type EmbedDescriptor = MenuItem & {
-  icon: React.FC<any>;
-  matcher: (url: string) => boolean | [] | RegExpMatchArray;
-  component: typeof React.Component | React.FC<any>;
 };
 
 export type ComponentProps = {

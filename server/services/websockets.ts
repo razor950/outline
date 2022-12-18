@@ -5,7 +5,9 @@ import Koa from "koa";
 import IO from "socket.io";
 import { createAdapter } from "socket.io-redis";
 import Logger from "@server/logging/Logger";
-import Metrics from "@server/logging/metrics";
+import Metrics from "@server/logging/Metrics";
+import * as Tracing from "@server/logging/tracing";
+import { APM } from "@server/logging/tracing";
 import { Document, Collection, View, User } from "@server/models";
 import { can } from "@server/policies";
 import { getUserForJWT } from "@server/utils/jwt";
@@ -29,7 +31,6 @@ export default function init(
   // Websockets for events and non-collaborative documents
   const io = new IO.Server(server, {
     path,
-    allowEIO3: true,
     serveClient: false,
     cookie: false,
     cors: {
@@ -93,10 +94,7 @@ export default function init(
 
   io.on("connection", (socket: SocketWithAuth) => {
     Metrics.increment("websockets.connected");
-    Metrics.gaugePerInstance(
-      "websockets.count",
-      socket.client.conn.server.clientsCount
-    );
+    Metrics.gaugePerInstance("websockets.count", io.engine.clientsCount);
 
     socket.on("authentication", async function (data) {
       try {
@@ -115,10 +113,7 @@ export default function init(
 
     socket.on("disconnect", async () => {
       Metrics.increment("websockets.disconnected");
-      Metrics.gaugePerInstance(
-        "websockets.count",
-        socket.client.conn.server.clientsCount
-      );
+      Metrics.gaugePerInstance("websockets.count", io.engine.clientsCount);
       await Redis.defaultClient.hdel(socket.id, "userId");
     });
 
@@ -135,14 +130,23 @@ export default function init(
 
   // Handle events from event queue that should be sent to the clients down ws
   const websockets = new WebsocketsProcessor();
-  websocketQueue.process(async function websocketEventsProcessor(job) {
-    const event = job.data;
-    websockets.perform(event, io).catch((error) => {
-      Logger.error("Error processing websocket event", error, {
-        event,
+  websocketQueue.process(
+    APM.traceFunction({
+      serviceName: "websockets",
+      spanName: "process",
+      isRoot: true,
+    })(async function (job) {
+      const event = job.data;
+
+      Tracing.setResource(`Processor.WebsocketsProcessor`);
+
+      websockets.perform(event, io).catch((error) => {
+        Logger.error("Error processing websocket event", error, {
+          event,
+        });
       });
-    });
-  });
+    })
+  );
 }
 
 async function authenticated(io: IO.Server, socket: SocketWithAuth) {
@@ -294,6 +298,8 @@ async function authenticate(socket: SocketWithAuth, data: { token: string }) {
   socket.client.user = user;
 
   // store the mapping between socket id and user id in redis so that it is
-  // accessible across multiple websocket servers
+  // accessible across multiple websocket servers. Lasts 24 hours, if they have
+  // a websocket connection that lasts this long then well done.
   await Redis.defaultClient.hset(socket.id, "userId", user.id);
+  await Redis.defaultClient.expire(socket.id, 3600 * 24);
 }

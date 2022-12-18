@@ -2,6 +2,7 @@ import { CollapsedIcon } from "outline-icons";
 import * as React from "react";
 import styled, { keyframes } from "styled-components";
 import usePersistedState from "~/hooks/usePersistedState";
+import { undraggableOnDesktop } from "~/styles";
 
 type Props = {
   /** Unique header id – if passed the header will become toggleable */
@@ -14,7 +15,7 @@ type Props = {
  */
 export const Header: React.FC<Props> = ({ id, title, children }) => {
   const [firstRender, setFirstRender] = React.useState(true);
-  const [expanded, setExpanded] = usePersistedState(
+  const [expanded, setExpanded] = usePersistedState<boolean>(
     `sidebar-header-${id}`,
     true
   );
@@ -76,11 +77,12 @@ const Button = styled.button`
   border-radius: 4px;
   -webkit-appearance: none;
   transition: all 100ms ease;
+  ${undraggableOnDesktop()}
 
   &:not(:disabled):hover,
   &:not(:disabled):active {
     color: ${(props) => props.theme.textSecondary};
-    cursor: pointer;
+    cursor: var(--pointer);
   }
 `;
 

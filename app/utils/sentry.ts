@@ -8,6 +8,7 @@ export function initSentry(history: History) {
     dsn: env.SENTRY_DSN,
     environment: env.ENVIRONMENT,
     release: env.RELEASE,
+    tunnel: env.SENTRY_TUNNEL,
     integrations: [
       new Integrations.BrowserTracing({
         routingInstrumentation: Sentry.reactRouterV5Instrumentation(history),
@@ -22,6 +23,7 @@ export function initSentry(history: History) {
       "NetworkError",
       "NotFoundError",
       "OfflineError",
+      "RateLimitExceededError",
       "ServiceUnavailableError",
       "UpdateRequiredError",
       "ChunkLoadError",

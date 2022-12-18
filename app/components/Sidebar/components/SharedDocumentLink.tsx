@@ -5,6 +5,7 @@ import Collection from "~/models/Collection";
 import Document from "~/models/Document";
 import useStores from "~/hooks/useStores";
 import { NavigationNode } from "~/types";
+import { sharedDocumentPath } from "~/utils/routeHelpers";
 import Disclosure from "./Disclosure";
 import SidebarLink from "./SidebarLink";
 
@@ -92,14 +93,14 @@ function DocumentLink(
     <>
       <SidebarLink
         to={{
-          pathname: `/share/${shareId}${node.url}`,
+          pathname: sharedDocumentPath(shareId, node.url),
           state: {
             title: node.title,
           },
         }}
         label={
           <>
-            {hasChildDocuments && (
+            {hasChildDocuments && depth !== 0 && (
               <Disclosure expanded={expanded} onClick={handleDisclosureClick} />
             )}
             {title}

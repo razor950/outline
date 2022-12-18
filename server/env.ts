@@ -22,6 +22,7 @@ import {
 import { languages } from "@shared/i18n";
 import { CannotUseWithout } from "@server/utils/validators";
 import Deprecated from "./models/decorators/Deprecated";
+import { getArg } from "./utils/args";
 
 export class Environment {
   private validationPromise;
@@ -50,14 +51,14 @@ export class Environment {
    * set or your users will be unable to login.
    */
   @IsByteLength(32, 64)
-  public SECRET_KEY = `${process.env.SECRET_KEY}`;
+  public SECRET_KEY = process.env.SECRET_KEY ?? "";
 
   /**
    * The secret that should be passed to the cron utility endpoint to enable
    * triggering of scheduled tasks.
    */
   @IsNotEmpty()
-  public UTILS_SECRET = `${process.env.UTILS_SECRET}`;
+  public UTILS_SECRET = process.env.UTILS_SECRET ?? "";
 
   /**
    * The url of the database.
@@ -68,7 +69,7 @@ export class Environment {
     allow_underscores: true,
     protocols: ["postgres", "postgresql"],
   })
-  public DATABASE_URL = `${process.env.DATABASE_URL}`;
+  public DATABASE_URL = process.env.DATABASE_URL ?? "";
 
   /**
    * The url of the database pool.
@@ -124,7 +125,7 @@ export class Environment {
    */
   @IsNotEmpty()
   @IsUrl({ require_tld: false })
-  public URL = `${process.env.URL}`;
+  public URL = process.env.URL || "";
 
   /**
    * If using a Cloudfront/Cloudflare distribution or similar it can be set below.
@@ -156,7 +157,7 @@ export class Environment {
   /**
    * Optional extra debugging. Comma separated
    */
-  public DEBUG = `${process.env.DEBUG}`;
+  public DEBUG = process.env.DEBUG || "";
 
   /**
    * How many processes should be spawned. As a reasonable rule divide your
@@ -165,6 +166,15 @@ export class Environment {
   @IsNumber()
   @IsOptional()
   public WEB_CONCURRENCY = this.toOptionalNumber(process.env.WEB_CONCURRENCY);
+
+  /**
+   * How long a request should be processed before giving up and returning an
+   * error response to the client, defaults to 10s
+   */
+  @IsNumber()
+  @IsOptional()
+  public REQUEST_TIMEOUT =
+    this.toOptionalNumber(process.env.REQUEST_TIMEOUT) ?? 10 * 1000;
 
   /**
    * Base64 encoded private key if Outline is to perform SSL termination.
@@ -188,11 +198,6 @@ export class Environment {
   public DEPLOYMENT = this.toOptionalString(process.env.DEPLOYMENT);
 
   /**
-   * Custom company logo that displays on the authentication screen.
-   */
-  public TEAM_LOGO = process.env.TEAM_LOGO;
-
-  /**
    * The default interface language. See translate.getoutline.com for a list of
    * available language codes and their percentage translated.
    */
@@ -202,9 +207,14 @@ export class Environment {
   /**
    * A comma separated list of which services should be enabled on this
    * instance – defaults to all.
+   *
+   * If a services flag is passed it takes priority over the environment variable
+   * for example: --services=web,worker
    */
   public SERVICES =
-    process.env.SERVICES ?? "collaboration,websockets,worker,web";
+    getArg("services") ??
+    process.env.SERVICES ??
+    "collaboration,websockets,worker,web";
 
   /**
    * Auto-redirect to https in production. The default is true but you may set
@@ -308,16 +318,16 @@ export class Environment {
   public SENTRY_DSN = this.toOptionalString(process.env.SENTRY_DSN);
 
   /**
+   * Sentry tunnel URL for bypassing ad blockers
+   */
+  @IsUrl()
+  @IsOptional()
+  public SENTRY_TUNNEL = this.toOptionalString(process.env.SENTRY_TUNNEL);
+
+  /**
    * A release SHA or other identifier for Sentry.
    */
   public RELEASE = this.toOptionalString(process.env.RELEASE);
-
-  /**
-   * An optional host from which to load default avatars.
-   */
-  @IsUrl()
-  public DEFAULT_AVATAR_HOST =
-    process.env.DEFAULT_AVATAR_HOST ?? "https://tiley.herokuapp.com";
 
   /**
    * A Google Analytics tracking ID, only v3 supported at this time.
@@ -414,6 +424,19 @@ export class Environment {
     process.env.AZURE_RESOURCE_APP_ID
   );
 
+ /**
+  * 
+  */
+ @IsOptional()
+ @CannotUseWithout("GITHUB_CLIENT_SECRET")
+ public GITHUB_CLIENT_ID = this.toOptionalString(process.env.GITHUB_CLIENT_ID);
+
+ @IsOptional()
+ @CannotUseWithout("GITHUB_CLIENT_ID")
+ public GITHUB_CLIENT_SECRET = this.toOptionalString(
+   process.env.GITHUB_CLIENT_SECRET
+ );
+
   /**
    * OICD client credentials. To enable authentication with any
    * compatible provider.
@@ -494,6 +517,49 @@ export class Environment {
   public VERSION = this.toOptionalString(
     process.env.SOURCE_COMMIT || process.env.SOURCE_VERSION
   );
+
+  /**
+   * A boolean switch to toggle the rate limiter at application web server.
+   */
+  @IsOptional()
+  @IsBoolean()
+  public RATE_LIMITER_ENABLED = this.toBoolean(
+    process.env.RATE_LIMITER_ENABLED ?? "false"
+  );
+
+  /**
+   * Set max allowed requests in a given duration for default rate limiter to
+   * trigger throttling, per IP address.
+   */
+  @IsOptional()
+  @IsNumber()
+  @CannotUseWithout("RATE_LIMITER_ENABLED")
+  public RATE_LIMITER_REQUESTS =
+    this.toOptionalNumber(process.env.RATE_LIMITER_REQUESTS) ?? 1000;
+
+  /**
+   * Set fixed duration window(in secs) for default rate limiter, elapsing which
+   * the request quota is reset (the bucket is refilled with tokens).
+   */
+  @IsOptional()
+  @IsNumber()
+  @CannotUseWithout("RATE_LIMITER_ENABLED")
+  public RATE_LIMITER_DURATION_WINDOW =
+    this.toOptionalNumber(process.env.RATE_LIMITER_DURATION_WINDOW) ?? 60;
+
+  /**
+   * Set max allowed upload size for file attachments.
+   */
+  @IsOptional()
+  @IsNumber()
+  public AWS_S3_UPLOAD_MAX_SIZE =
+    this.toOptionalNumber(process.env.AWS_S3_UPLOAD_MAX_SIZE) ?? 10000000000;
+
+  /**
+   * Set default AWS S3 ACL for file attachments.
+   */
+  @IsOptional()
+  public AWS_S3_ACL = process.env.AWS_S3_ACL ?? "private";
 
   private toOptionalString(value: string | undefined) {
     return value ? value : undefined;

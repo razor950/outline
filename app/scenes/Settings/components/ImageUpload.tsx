@@ -5,6 +5,8 @@ import * as React from "react";
 import AvatarEditor from "react-avatar-editor";
 import Dropzone from "react-dropzone";
 import styled from "styled-components";
+import { AttachmentPreset } from "@shared/types";
+import { AttachmentValidation } from "@shared/validations";
 import RootStore from "~/stores/RootStore";
 import Button from "~/components/Button";
 import Flex from "~/components/Flex";
@@ -66,7 +68,7 @@ class ImageUpload extends React.Component<RootStore & Props> {
       });
       const attachment = await uploadFile(compressed, {
         name: this.file.name,
-        public: true,
+        preset: AttachmentPreset.Avatar,
       });
       this.props.onSuccess(attachment.url);
     } catch (err) {
@@ -134,7 +136,7 @@ class ImageUpload extends React.Component<RootStore & Props> {
 
     return (
       <Dropzone
-        accept="image/png, image/jpeg"
+        accept={AttachmentValidation.avatarContentTypes.join(", ")}
         onDropAccepted={this.onDropAccepted}
       >
         {({ getRootProps, getInputProps }) => (
@@ -157,7 +159,7 @@ const RangeInput = styled.input`
   width: 300px;
   margin-bottom: 30px;
   height: 4px;
-  cursor: pointer;
+  cursor: var(--pointer);
   color: inherit;
   border-radius: 99999px;
   background-color: #dee1e3;
@@ -169,7 +171,7 @@ const RangeInput = styled.input`
     width: 16px;
     border-radius: 50%;
     background: ${(props) => props.theme.text};
-    cursor: pointer;
+    cursor: var(--pointer);
   }
 
   &:focus {

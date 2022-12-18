@@ -1,4 +1,5 @@
 import invariant from "invariant";
+import { TeamPreference } from "@shared/types";
 import { Document, Revision, User, Team } from "@server/models";
 import { allow, _cannot as cannot } from "./cancan";
 
@@ -9,13 +10,33 @@ allow(User, "createDocument", Team, (user, team) => {
   return true;
 });
 
-allow(User, ["read", "download"], Document, (user, document) => {
+allow(User, "read", Document, (user, document) => {
   if (!document) {
     return false;
   }
 
   // existence of collection option is not required here to account for share tokens
   if (document.collection && cannot(user, "read", document.collection)) {
+    return false;
+  }
+
+  return user.teamId === document.teamId;
+});
+
+allow(User, "download", Document, (user, document) => {
+  if (!document) {
+    return false;
+  }
+
+  // existence of collection option is not required here to account for share tokens
+  if (document.collection && cannot(user, "read", document.collection)) {
+    return false;
+  }
+
+  if (
+    user.isViewer &&
+    !user.team.getPreference(TeamPreference.ViewersCanExport, true)
+  ) {
     return false;
   }
 
@@ -35,13 +56,17 @@ allow(User, "star", Document, (user, document) => {
   if (document.template) {
     return false;
   }
-  invariant(
-    document.collection,
-    "collection is missing, did you forget to include in the query scope?"
-  );
-  if (cannot(user, "read", document.collection)) {
-    return false;
+
+  if (document.collectionId) {
+    invariant(
+      document.collection,
+      "collection is missing, did you forget to include in the query scope?"
+    );
+    if (cannot(user, "read", document.collection)) {
+      return false;
+    }
   }
+
   return user.teamId === document.teamId;
 });
 
@@ -52,13 +77,17 @@ allow(User, "unstar", Document, (user, document) => {
   if (document.template) {
     return false;
   }
-  invariant(
-    document.collection,
-    "collection is missing, did you forget to include in the query scope?"
-  );
-  if (cannot(user, "read", document.collection)) {
-    return false;
+
+  if (document.collectionId) {
+    invariant(
+      document.collection,
+      "collection is missing, did you forget to include in the query scope?"
+    );
+    if (cannot(user, "read", document.collection)) {
+      return false;
+    }
   }
+
   return user.teamId === document.teamId;
 });
 
@@ -95,8 +124,15 @@ allow(User, "update", Document, (user, document) => {
     return false;
   }
 
-  if (cannot(user, "update", document.collection)) {
-    return false;
+  if (document.collectionId) {
+    invariant(
+      document.collection,
+      "collection is missing, did you forget to include in the query scope?"
+    );
+
+    if (cannot(user, "update", document.collection)) {
+      return false;
+    }
   }
 
   return user.teamId === document.teamId;
@@ -151,31 +187,36 @@ allow(User, "move", Document, (user, document) => {
   return user.teamId === document.teamId;
 });
 
-allow(User, ["pin", "unpin"], Document, (user, document) => {
-  if (!document) {
-    return false;
+allow(
+  User,
+  ["pin", "unpin", "subscribe", "unsubscribe"],
+  Document,
+  (user, document) => {
+    if (!document) {
+      return false;
+    }
+    if (document.archivedAt) {
+      return false;
+    }
+    if (document.deletedAt) {
+      return false;
+    }
+    if (document.template) {
+      return false;
+    }
+    if (!document.publishedAt) {
+      return false;
+    }
+    invariant(
+      document.collection,
+      "collection is missing, did you forget to include in the query scope?"
+    );
+    if (cannot(user, "update", document.collection)) {
+      return false;
+    }
+    return user.teamId === document.teamId;
   }
-  if (document.archivedAt) {
-    return false;
-  }
-  if (document.deletedAt) {
-    return false;
-  }
-  if (document.template) {
-    return false;
-  }
-  if (!document.publishedAt) {
-    return false;
-  }
-  invariant(
-    document.collection,
-    "collection is missing, did you forget to include in the query scope?"
-  );
-  if (cannot(user, "update", document.collection)) {
-    return false;
-  }
-  return user.teamId === document.teamId;
-});
+);
 
 allow(User, ["pinToHome"], Document, (user, document) => {
   if (!document) {
@@ -204,9 +245,6 @@ allow(User, "delete", Document, (user, document) => {
   if (document.deletedAt) {
     return false;
   }
-  if (user.isViewer) {
-    return false;
-  }
 
   // allow deleting document without a collection
   if (document.collection && cannot(user, "update", document.collection)) {
@@ -232,9 +270,6 @@ allow(User, "permanentDelete", Document, (user, document) => {
   if (!document.deletedAt) {
     return false;
   }
-  if (user.isViewer) {
-    return false;
-  }
 
   // allow deleting document without a collection
   if (document.collection && cannot(user, "update", document.collection)) {
@@ -249,9 +284,6 @@ allow(User, "restore", Document, (user, document) => {
     return false;
   }
   if (!document.deletedAt) {
-    return false;
-  }
-  if (user.isViewer) {
     return false;
   }
 
