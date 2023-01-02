@@ -249,7 +249,7 @@
     "@types/inline-css": "^3.0.1",
     "@types/invariant": "^2.2.35",
     "@types/ioredis": "^4.28.1",
-    "@types/jest": "^28.1.6",
+    "@types/jest": "^29.2.5",
     "@types/jsonwebtoken": "^8.5.8",
     "@types/katex": "^0.14.0",
     "@types/koa": "^2.13.4",
