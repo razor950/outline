@@ -5,46 +5,33 @@ import { bytesToHumanReadable } from "@shared/utils/files";
 import { AttachmentValidation } from "@shared/validations";
 import { AuthorizationError, ValidationError } from "@server/errors";
 import auth from "@server/middlewares/authentication";
-import {
-  transaction,
-  TransactionContext,
-} from "@server/middlewares/transaction";
+import { transaction } from "@server/middlewares/transaction";
+import validate from "@server/middlewares/validate";
 import { Attachment, Document, Event } from "@server/models";
 import AttachmentHelper from "@server/models/helpers/AttachmentHelper";
 import { authorize } from "@server/policies";
 import { presentAttachment } from "@server/presenters";
-import { ContextWithState } from "@server/types";
+import { APIContext } from "@server/types";
 import { getPresignedPost, publicS3Endpoint } from "@server/utils/s3";
-import { assertIn, assertPresent, assertUuid } from "@server/validation";
+import { assertIn } from "@server/validation";
+import * as T from "./schema";
 
 const router = new Router();
 
 router.post(
   "attachments.create",
   auth(),
+  validate(T.AttachmentsCreateSchema),
   transaction(),
-  async (ctx: TransactionContext) => {
-    const {
-      name,
-      documentId,
-      contentType = "application/octet-stream",
-      size,
-      // 'public' is now deprecated and can be removed on December 1 2022.
-      public: isPublicDeprecated,
-      preset = isPublicDeprecated
-        ? AttachmentPreset.Avatar
-        : AttachmentPreset.DocumentAttachment,
-    } = ctx.request.body;
-    const { user, transaction } = ctx.state;
-
-    assertPresent(name, "name is required");
-    assertPresent(size, "size is required");
+  async (ctx: APIContext<T.AttachmentCreateReq>) => {
+    const { name, documentId, contentType, size, preset } = ctx.input.body;
+    const { auth, transaction } = ctx.state;
+    const { user } = auth;
 
     // All user types can upload an avatar so no additional authorization is needed.
     if (preset === AttachmentPreset.Avatar) {
       assertIn(contentType, AttachmentValidation.avatarContentTypes);
     } else if (preset === AttachmentPreset.DocumentAttachment && documentId) {
-      assertUuid(documentId, "documentId must be a uuid");
       const document = await Document.findByPk(documentId, {
         userId: user.id,
       });
@@ -121,40 +108,45 @@ router.post(
   }
 );
 
-router.post("attachments.delete", auth(), async (ctx) => {
-  const { id } = ctx.request.body;
-  assertUuid(id, "id is required");
-  const { user } = ctx.state;
-  const attachment = await Attachment.findByPk(id, {
-    rejectOnEmpty: true,
-  });
-
-  if (attachment.documentId) {
-    const document = await Document.findByPk(attachment.documentId, {
-      userId: user.id,
+router.post(
+  "attachments.delete",
+  auth(),
+  validate(T.AttachmentDeleteSchema),
+  async (ctx: APIContext<T.AttachmentDeleteReq>) => {
+    const { id } = ctx.input.body;
+    const { user } = ctx.state.auth;
+    const attachment = await Attachment.findByPk(id, {
+      rejectOnEmpty: true,
     });
-    authorize(user, "update", document);
+
+    if (attachment.documentId) {
+      const document = await Document.findByPk(attachment.documentId, {
+        userId: user.id,
+      });
+      authorize(user, "update", document);
+    }
+
+    authorize(user, "delete", attachment);
+    await attachment.destroy();
+    await Event.create({
+      name: "attachments.delete",
+      teamId: user.teamId,
+      actorId: user.id,
+      ip: ctx.request.ip,
+    });
+
+    ctx.body = {
+      success: true,
+    };
   }
+);
 
-  authorize(user, "delete", attachment);
-  await attachment.destroy();
-  await Event.create({
-    name: "attachments.delete",
-    teamId: user.teamId,
-    actorId: user.id,
-    ip: ctx.request.ip,
-  });
+const handleAttachmentsRedirect = async (
+  ctx: APIContext<T.AttachmentsRedirectReq>
+) => {
+  const id = (ctx.input.body.id ?? ctx.input.query.id) as string;
 
-  ctx.body = {
-    success: true,
-  };
-});
-
-const handleAttachmentsRedirect = async (ctx: ContextWithState) => {
-  const id = ctx.request.body?.id ?? ctx.request.query?.id;
-  assertUuid(id, "id is required");
-
-  const { user } = ctx.state;
+  const { user } = ctx.state.auth;
   const attachment = await Attachment.findByPk(id, {
     rejectOnEmpty: true,
   });
@@ -174,7 +166,17 @@ const handleAttachmentsRedirect = async (ctx: ContextWithState) => {
   }
 };
 
-router.get("attachments.redirect", auth(), handleAttachmentsRedirect);
-router.post("attachments.redirect", auth(), handleAttachmentsRedirect);
+router.get(
+  "attachments.redirect",
+  auth(),
+  validate(T.AttachmentsRedirectSchema),
+  handleAttachmentsRedirect
+);
+router.post(
+  "attachments.redirect",
+  auth(),
+  validate(T.AttachmentsRedirectSchema),
+  handleAttachmentsRedirect
+);
 
 export default router;

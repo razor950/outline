@@ -2,15 +2,14 @@ import Router from "koa-router";
 import { find } from "lodash";
 import { Client } from "@shared/types";
 import { parseDomain } from "@shared/utils/domains";
-import { RateLimiterStrategy } from "@server/RateLimiter";
 import InviteAcceptedEmail from "@server/emails/templates/InviteAcceptedEmail";
 import SigninEmail from "@server/emails/templates/SigninEmail";
 import WelcomeEmail from "@server/emails/templates/WelcomeEmail";
 import env from "@server/env";
 import { AuthorizationError } from "@server/errors";
-import errorHandling from "@server/middlewares/errorHandling";
 import { rateLimiter } from "@server/middlewares/rateLimiter";
 import { User, Team } from "@server/models";
+import { RateLimiterStrategy } from "@server/utils/RateLimiter";
 import { signIn } from "@server/utils/authentication";
 import { getUserForEmailSigninToken } from "@server/utils/jwt";
 import { assertEmail, assertPresent } from "@server/validation";
@@ -24,7 +23,6 @@ export const config = {
 
 router.post(
   "email",
-  errorHandling(),
   rateLimiter(RateLimiterStrategy.TenPerHour),
   async (ctx) => {
     const { email, client } = ctx.request.body;

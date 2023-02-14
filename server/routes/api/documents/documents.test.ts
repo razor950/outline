@@ -1,3 +1,4 @@
+import { subDays } from "date-fns";
 import { CollectionPermission } from "@shared/types";
 import {
   Document,
@@ -29,9 +30,7 @@ describe("#documents.info", () => {
     });
     const body = await res.json();
     expect(res.status).toEqual(400);
-    expect(body.message).toEqual(
-      "ValidationError: one of id or shareId is required"
-    );
+    expect(body.message).toEqual("one of id or shareId is required");
   });
 
   it("should return published document", async () => {
@@ -232,7 +231,7 @@ describe("#documents.info", () => {
       expect(body.data.document.id).toEqual(document.id);
       expect(body.data.document.createdBy).toEqual(undefined);
       expect(body.data.document.updatedBy).toEqual(undefined);
-      expect(body.data.sharedTree).toEqual(document.toJSON());
+      expect(body.data.sharedTree).toEqual(await document.toNavigationNode());
     });
     it("should not return sharedTree if child documents not shared", async () => {
       const { document, user } = await seed();
@@ -466,10 +465,12 @@ describe("#documents.info", () => {
   it("should require a valid shareId", async () => {
     const res = await server.post("/api/documents.info", {
       body: {
-        shareId: 123,
+        shareId: "share_id",
       },
     });
+    const body = await res.json();
     expect(res.status).toEqual(400);
+    expect(body.message).toEqual("shareId: Invalid input");
   });
 });
 
@@ -549,113 +550,6 @@ describe("#documents.export", () => {
     expect(body.data).toEqual(DocumentHelper.toMarkdown(document));
   });
 
-  it("should return document from shareId without token", async () => {
-    const { document, user } = await seed();
-    const share = await buildShare({
-      documentId: document.id,
-      teamId: document.teamId,
-      userId: user.id,
-    });
-    const res = await server.post("/api/documents.export", {
-      body: {
-        shareId: share.id,
-      },
-    });
-    const body = await res.json();
-    expect(res.status).toEqual(200);
-    expect(body.data).toEqual(DocumentHelper.toMarkdown(document));
-  });
-
-  it("should not return document from revoked shareId", async () => {
-    const { document, user } = await seed();
-    const share = await buildShare({
-      documentId: document.id,
-      teamId: document.teamId,
-      userId: user.id,
-    });
-    await share.revoke(user.id);
-    const res = await server.post("/api/documents.export", {
-      body: {
-        shareId: share.id,
-      },
-    });
-    expect(res.status).toEqual(400);
-  });
-
-  it("should not return document from archived shareId", async () => {
-    const { document, user } = await seed();
-    const share = await buildShare({
-      documentId: document.id,
-      teamId: document.teamId,
-      userId: user.id,
-    });
-    await document.archive(user.id);
-    const res = await server.post("/api/documents.export", {
-      body: {
-        shareId: share.id,
-      },
-    });
-    expect(res.status).toEqual(400);
-  });
-
-  it("should return document from shareId with token", async () => {
-    const { user, document } = await seed();
-    const share = await buildShare({
-      documentId: document.id,
-      teamId: document.teamId,
-      userId: user.id,
-    });
-    const res = await server.post("/api/documents.export", {
-      body: {
-        token: user.getJwtToken(),
-        shareId: share.id,
-      },
-    });
-    const body = await res.json();
-    expect(res.status).toEqual(200);
-    expect(body.data).toEqual(DocumentHelper.toMarkdown(document));
-  });
-
-  it("should return draft document from shareId with token", async () => {
-    const { user, document } = await seed();
-    document.publishedAt = null;
-    await document.save();
-    const share = await buildShare({
-      documentId: document.id,
-      teamId: document.teamId,
-      userId: user.id,
-    });
-    const res = await server.post("/api/documents.export", {
-      body: {
-        token: user.getJwtToken(),
-        shareId: share.id,
-      },
-    });
-    const body = await res.json();
-    expect(res.status).toEqual(200);
-    expect(body.data).toEqual(DocumentHelper.toMarkdown(document));
-  });
-
-  it("should return document from shareId in collection not a member of", async () => {
-    const { user, document, collection } = await seed();
-    const share = await buildShare({
-      documentId: document.id,
-      teamId: document.teamId,
-      userId: user.id,
-    });
-    collection.permission = null;
-    await collection.save();
-    const res = await server.post("/api/documents.export", {
-      body: {
-        token: user.getJwtToken(),
-        shareId: share.id,
-      },
-    });
-    const body = await res.json();
-    expect(res.status).toEqual(200);
-    expect(body.data).toEqual(DocumentHelper.toMarkdown(document));
-  });
-
   it("should require authorization without token", async () => {
     const { document } = await seed();
     const res = await server.post("/api/documents.export", {
@@ -676,15 +570,6 @@ describe("#documents.export", () => {
       },
     });
     expect(res.status).toEqual(403);
-  });
-
-  it("should require a valid shareId", async () => {
-    const res = await server.post("/api/documents.export", {
-      body: {
-        shareId: 123,
-      },
-    });
-    expect(res.status).toEqual(400);
   });
 });
 
@@ -1046,6 +931,88 @@ describe("#documents.search_titles", () => {
     expect(body.data[0].id).toEqual(document.id);
   });
 
+  it("should allow filtering of results by date", async () => {
+    const user = await buildUser();
+    await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+      createdAt: subDays(new Date(), 365),
+      updatedAt: subDays(new Date(), 365),
+    });
+    const res = await server.post("/api/documents.search_titles", {
+      body: {
+        token: user.getJwtToken(),
+        query: "SECRET",
+        dateFilter: "day",
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(0);
+  });
+
+  it("should allow filtering to include archived", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+      archivedAt: new Date(),
+    });
+    const res = await server.post("/api/documents.search_titles", {
+      body: {
+        token: user.getJwtToken(),
+        query: "SECRET",
+        includeArchived: true,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(1);
+    expect(body.data[0].id).toEqual(document.id);
+  });
+
+  it("should allow filtering to include drafts", async () => {
+    const user = await buildUser();
+    const document = await buildDraftDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+    });
+    const res = await server.post("/api/documents.search_titles", {
+      body: {
+        token: user.getJwtToken(),
+        query: "SECRET",
+        includeDrafts: true,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(1);
+    expect(body.data[0].id).toEqual(document.id);
+  });
+
+  it("should allow filtering to include a user", async () => {
+    const user = await buildUser();
+    const document = await buildDocument({
+      userId: user.id,
+      teamId: user.teamId,
+      title: "Super secret",
+    });
+    const res = await server.post("/api/documents.search_titles", {
+      body: {
+        token: user.getJwtToken(),
+        query: "SECRET",
+        userId: user.id,
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(200);
+    expect(body.data.length).toEqual(1);
+    expect(body.data[0].id).toEqual(document.id);
+  });
+
   it("should not include archived or deleted documents", async () => {
     const user = await buildUser();
     await buildDocument({
@@ -1078,20 +1045,6 @@ describe("#documents.search_titles", () => {
 });
 
 describe("#documents.search", () => {
-  it("should fail for invalid shareId", async () => {
-    const { user } = await seed();
-    const res = await server.post("/api/documents.search", {
-      body: {
-        token: user.getJwtToken(),
-        query: "much",
-        shareId: "invalid",
-      },
-    });
-    const body = await res.json();
-    expect(res.status).toEqual(400);
-    expect(body.message).toEqual("shareId: Invalid uuid");
-  });
-
   it("should return results", async () => {
     const { user } = await seed();
     const res = await server.post("/api/documents.search", {
@@ -1869,8 +1822,28 @@ describe("#documents.move", () => {
     const body = await res.json();
     expect(res.status).toEqual(400);
     expect(body.message).toEqual(
-      "ValidationError: infinite loop detected, cannot nest a document inside itself"
+      "infinite loop detected, cannot nest a document inside itself"
     );
+  });
+
+  it("should fail if attempting to nest doc within a draft", async () => {
+    const { user, document, collection } = await seed();
+    const draft = await buildDraftDocument({
+      userId: user.id,
+      teamId: document.teamId,
+      collectionId: collection.id,
+    });
+    const res = await server.post("/api/documents.move", {
+      body: {
+        id: document.id,
+        collectionId: collection.id,
+        parentDocumentId: draft.id,
+        token: user.getJwtToken(),
+      },
+    });
+    const body = await res.json();
+    expect(res.status).toEqual(400);
+    expect(body.message).toEqual("Cannot move document inside a draft");
   });
 
   it("should require id", async () => {
@@ -2333,7 +2306,7 @@ describe("#documents.create", () => {
 
     expect(res.status).toEqual(400);
     expect(body.message).toBe(
-      "ValidationError: collectionId is required to create a template document"
+      "collectionId is required to create a template document"
     );
   });
 
@@ -2351,9 +2324,7 @@ describe("#documents.create", () => {
     const body = await res.json();
 
     expect(res.status).toEqual(400);
-    expect(body.message).toBe(
-      "ValidationError: collectionId is required to publish"
-    );
+    expect(body.message).toBe("collectionId is required to publish");
   });
 
   it("should not allow creating a nested doc without a collection", async () => {
@@ -2371,7 +2342,7 @@ describe("#documents.create", () => {
 
     expect(res.status).toEqual(400);
     expect(body.message).toBe(
-      "ValidationError: collectionId is required to create a nested document"
+      "collectionId is required to create a nested document"
     );
   });
 
@@ -2651,7 +2622,7 @@ describe("#documents.update", () => {
             title: "Another doc",
             children: [],
           },
-          { ...document.toJSON(), children: [] },
+          { ...(await document.toNavigationNode()), children: [] },
         ],
       },
     ];
@@ -2846,6 +2817,39 @@ describe("#documents.update", () => {
     const body = await res.json();
     expect(res.status).toBe(400);
     expect(body.message).toBe("id: Required");
+  });
+
+  describe("apiVersion=2", () => {
+    it("should successfully publish a draft", async () => {
+      const { user, team, collection } = await seed();
+      const document = await buildDraftDocument({
+        title: "title",
+        text: "text",
+        teamId: team.id,
+      });
+
+      const res = await server.post("/api/documents.update", {
+        body: {
+          apiVersion: 2,
+          token: user.getJwtToken(),
+          id: document.id,
+          title: "Updated title",
+          text: "Updated text",
+          lastRevision: document.revisionCount,
+          collectionId: collection.id,
+          publish: true,
+        },
+      });
+      const body = await res.json();
+      expect(res.status).toEqual(200);
+      expect(body.data.document.collectionId).toBe(collection.id);
+      expect(body.data.document.title).toBe("Updated title");
+      expect(body.data.document.text).toBe("Updated text");
+      expect(body.data.collection.icon).toBe(collection.icon);
+      expect(body.data.collection.documents.length).toBe(
+        collection.documentStructure!.length + 1
+      );
+    });
   });
 });
 

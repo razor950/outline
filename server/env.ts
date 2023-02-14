@@ -265,6 +265,12 @@ export class Environment {
   public SMTP_HOST = process.env.SMTP_HOST;
 
   /**
+   * Optional hostname of the client, used for identifying to the server
+   * defaults to hostname of the machine.
+   */
+  public SMTP_NAME = process.env.SMTP_NAME;
+
+  /**
    * The port of your SMTP server.
    */
   @IsNumber()
@@ -330,7 +336,7 @@ export class Environment {
   public RELEASE = this.toOptionalString(process.env.RELEASE);
 
   /**
-   * A Google Analytics tracking ID, only v3 supported at this time.
+   * A Google Analytics tracking ID, supports only v3 properties.
    */
   @Contains("UA-")
   @IsOptional()
@@ -342,6 +348,11 @@ export class Environment {
    * A DataDog API key for tracking server metrics.
    */
   public DD_API_KEY = process.env.DD_API_KEY;
+
+  /**
+   * The name of the service to use in DataDog.
+   */
+  public DD_SERVICE = process.env.DD_SERVICE ?? "outline";
 
   /**
    * Google OAuth2 client credentials. To enable authentication with Google.
@@ -423,19 +434,6 @@ export class Environment {
   public AZURE_RESOURCE_APP_ID = this.toOptionalString(
     process.env.AZURE_RESOURCE_APP_ID
   );
-
- /**
-  * 
-  */
- @IsOptional()
- @CannotUseWithout("GITHUB_CLIENT_SECRET")
- public GITHUB_CLIENT_ID = this.toOptionalString(process.env.GITHUB_CLIENT_ID);
-
- @IsOptional()
- @CannotUseWithout("GITHUB_CLIENT_ID")
- public GITHUB_CLIENT_SECRET = this.toOptionalString(
-   process.env.GITHUB_CLIENT_SECRET
- );
 
   /**
    * OICD client credentials. To enable authentication with any
@@ -560,6 +558,11 @@ export class Environment {
    */
   @IsOptional()
   public AWS_S3_ACL = process.env.AWS_S3_ACL ?? "private";
+
+  /**
+   * The product name
+   */
+  public APP_NAME = "Outline";
 
   private toOptionalString(value: string | undefined) {
     return value ? value : undefined;

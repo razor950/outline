@@ -2,7 +2,7 @@ import removeMarkdown from "@tommoor/remove-markdown";
 import invariant from "invariant";
 import { find, map } from "lodash";
 import queryParser from "pg-tsquery";
-import { Op, QueryTypes } from "sequelize";
+import { Op, QueryTypes, WhereOptions } from "sequelize";
 import { DateFilter } from "@shared/types";
 import unescape from "@shared/utils/unescape";
 import { sequelize } from "@server/database/sequelize";
@@ -168,6 +168,122 @@ export default class SearchHelper {
     });
 
     return SearchHelper.buildResponse(results, documents, count);
+  }
+
+  public static async searchTitlesForUser(
+    user: User,
+    query: string,
+    options: SearchOptions = {}
+  ): Promise<Document[]> {
+    const { limit = 15, offset = 0 } = options;
+
+    const where: WhereOptions<Document> = {
+      teamId: user.teamId,
+      title: {
+        [Op.iLike]: `%${query}%`,
+      },
+      [Op.and]: [],
+    };
+
+    // Ensure we're filtering by the users accessible collections. If
+    // collectionId is passed as an option it is assumed that the authorization
+    // has already been done in the router
+    if (options.collectionId) {
+      where[Op.and].push({
+        collectionId: options.collectionId,
+      });
+    } else {
+      where[Op.and].push({
+        [Op.or]: [
+          {
+            collectionId: {
+              [Op.in]: await user.collectionIds(),
+            },
+          },
+          {
+            collectionId: {
+              [Op.is]: null,
+            },
+            createdById: user.id,
+          },
+        ],
+      });
+    }
+
+    if (options.dateFilter) {
+      where[Op.and].push({
+        updatedAt: {
+          [Op.gt]: sequelize.literal(
+            `now() - interval '1 ${options.dateFilter}'`
+          ),
+        },
+      });
+    }
+
+    if (!options.includeArchived) {
+      where[Op.and].push({
+        archivedAt: {
+          [Op.is]: null,
+        },
+      });
+    }
+
+    if (options.includeDrafts) {
+      where[Op.and].push({
+        [Op.or]: [
+          {
+            publishedAt: {
+              [Op.ne]: null,
+            },
+          },
+          {
+            createdById: user.id,
+          },
+        ],
+      });
+    } else {
+      where[Op.and].push({
+        publishedAt: {
+          [Op.ne]: null,
+        },
+      });
+    }
+
+    if (options.collaboratorIds) {
+      where[Op.and].push({
+        collaboratorIds: {
+          [Op.contains]: options.collaboratorIds,
+        },
+      });
+    }
+
+    return await Document.scope([
+      "withoutState",
+      "withDrafts",
+      {
+        method: ["withViews", user.id],
+      },
+      {
+        method: ["withCollectionPermissions", user.id],
+      },
+    ]).findAll({
+      where,
+      order: [["updatedAt", "DESC"]],
+      include: [
+        {
+          model: User,
+          as: "createdBy",
+          paranoid: false,
+        },
+        {
+          model: User,
+          as: "updatedBy",
+          paranoid: false,
+        },
+      ],
+      offset,
+      limit,
+    });
   }
 
   public static async searchForUser(

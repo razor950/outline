@@ -149,6 +149,10 @@ width: 100%;
   & > * {
     margin-top: .5em;
     margin-bottom: .5em;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   & > :first-child,
@@ -247,9 +251,6 @@ li {
     pointer-events: ${props.readOnly ? "initial" : "none"};
     display: inline-block;
     max-width: 100%;
-    transition-property: width, height;
-    transition-duration: 150ms;
-    transition-timing-function: ease-in-out;
   }
 
   .ProseMirror-selectednode img {
@@ -287,6 +288,21 @@ li {
   margin-right: 2em;
   margin-bottom: 1em;
   clear: initial;
+}
+
+.image-full-width {
+  width: initial;
+  max-width: 100vw;
+  clear: both;
+  position: initial;
+  ${props.rtl ? `margin-right: var(--offset)` : `margin-left: var(--offset)`};
+
+  img {
+    max-width: 100vw;
+    max-height: 50vh;
+    object-fit: cover;
+    object-position: center;
+  }
 }
 
 .ProseMirror-hideselection *::selection {
@@ -710,7 +726,6 @@ ol ol ol {
 }
 
 ul.checkbox_list {
-  list-style: none;
   padding: 0;
   margin-left: ${props.rtl ? "0" : "-24px"};
   margin-right: ${props.rtl ? "-24px" : "0"};
@@ -730,12 +745,13 @@ ol li {
   }
 }
 
-ul.checkbox_list li {
+ul.checkbox_list > li {
   display: flex;
+  list-style: none;
   padding-${props.rtl ? "right" : "left"}: 24px;
 }
 
-ul.checkbox_list li.checked > div > p {
+ul.checkbox_list > li.checked > div > p {
   color: ${props.theme.textTertiary};
 }
 
@@ -774,7 +790,7 @@ ol li.ProseMirror-selectednode::after {
   display: none;
 }
 
-ul.checkbox_list li::before {
+ul.checkbox_list > li::before {
   ${props.rtl ? "right" : "left"}: 0;
 }
 

@@ -1,7 +1,7 @@
 import { Transaction } from "sequelize";
 import { sequelize } from "@server/database/sequelize";
 import Logger from "@server/logging/Logger";
-import { APM } from "@server/logging/tracing";
+import { traceFunction } from "@server/logging/tracing";
 import {
   ApiKey,
   Attachment,
@@ -198,7 +198,6 @@ async function teamPermanentDeleter(team: Team) {
   }
 }
 
-export default APM.traceFunction({
-  serviceName: "command",
+export default traceFunction({
   spanName: "teamPermanentDeleter",
 })(teamPermanentDeleter);

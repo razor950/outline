@@ -1,5 +1,8 @@
 declare global {
   interface Window {
+    dataLayer: any[];
+    gtag: (...args: any[]) => void;
+
     DesktopBridge: {
       /**
        * The name of the platform running on.

@@ -1,5 +1,6 @@
 import ddMetrics from "datadog-metrics";
 import env from "@server/env";
+import ShutdownHelper, { ShutdownOrder } from "@server/utils/ShutdownHelper";
 
 class Metrics {
   enabled = !!env.DD_API_KEY;
@@ -14,6 +15,8 @@ class Metrics {
       prefix: "outline.",
       defaultTags: [`env:${process.env.DD_ENV ?? env.ENVIRONMENT}`],
     });
+
+    ShutdownHelper.add("metrics", ShutdownOrder.last, () => this.flush());
   }
 
   gauge(key: string, value: number, tags?: string[]): void {
@@ -29,13 +32,8 @@ class Metrics {
       return;
     }
 
-    const instanceId = process.env.INSTANCE_ID || process.env.HEROKU_DYNO_ID;
-
-    if (!instanceId) {
-      throw new Error(
-        "INSTANCE_ID or HEROKU_DYNO_ID must be set when using DataDog"
-      );
-    }
+    const instanceId =
+      process.env.INSTANCE_ID || process.env.HEROKU_DYNO_ID || process.pid;
 
     return ddMetrics.gauge(key, value, [...tags, `instance:${instanceId}`]);
   }
@@ -46,6 +44,16 @@ class Metrics {
     }
 
     return ddMetrics.increment(key);
+  }
+
+  flush(): Promise<void> {
+    if (!this.enabled) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve, reject) => {
+      ddMetrics.flush(resolve, reject);
+    });
   }
 }
 
