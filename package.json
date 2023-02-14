@@ -344,7 +344,7 @@
     "webpack-cli": "^4.10.0",
     "webpack-manifest-plugin": "^3.0.0",
     "webpack-pwa-manifest": "^4.3.0",
-    "workbox-webpack-plugin": "^6.5.3",
+    "workbox-webpack-plugin": "^6.5.4",
     "yarn-deduplicate": "^6.0.1"
   },
   "resolutions": {
