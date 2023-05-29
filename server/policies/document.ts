@@ -10,7 +10,7 @@ allow(User, "createDocument", Team, (user, team) => {
   return true;
 });
 
-allow(User, "read", Document, (user, document) => {
+allow(User, ["read", "comment"], Document, (user, document) => {
   if (!document) {
     return false;
   }
@@ -35,7 +35,7 @@ allow(User, "download", Document, (user, document) => {
 
   if (
     user.isViewer &&
-    !user.team.getPreference(TeamPreference.ViewersCanExport, true)
+    !user.team.getPreference(TeamPreference.ViewersCanExport)
   ) {
     return false;
   }

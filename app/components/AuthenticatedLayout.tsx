@@ -2,6 +2,7 @@ import { AnimatePresence } from "framer-motion";
 import { observer, useLocalStore } from "mobx-react";
 import * as React from "react";
 import { Switch, Route, useLocation, matchPath } from "react-router-dom";
+import { TeamPreference } from "@shared/types";
 import ErrorSuspended from "~/scenes/ErrorSuspended";
 import DocumentContext from "~/components/DocumentContext";
 import type { DocumentContextValue } from "~/components/DocumentContext";
@@ -16,35 +17,24 @@ import useStores from "~/hooks/useStores";
 import history from "~/utils/history";
 import {
   searchPath,
-  matchDocumentSlug as slug,
   newDocumentPath,
   settingsPath,
   matchDocumentHistory,
+  matchDocumentSlug as slug,
   matchDocumentInsights,
 } from "~/utils/routeHelpers";
 import Fade from "./Fade";
 
+const DocumentComments = React.lazy(
+  () => import("~/scenes/Document/components/Comments")
+);
 const DocumentHistory = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "document-history" */
-      "~/scenes/Document/components/History"
-    )
+  () => import("~/scenes/Document/components/History")
 );
 const DocumentInsights = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "document-insights" */
-      "~/scenes/Document/components/Insights"
-    )
+  () => import("~/scenes/Document/components/Insights")
 );
-const CommandBar = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "command-bar" */
-      "~/components/CommandBar"
-    )
-);
+const CommandBar = React.lazy(() => import("~/components/CommandBar"));
 
 const AuthenticatedLayout: React.FC = ({ children }) => {
   const { ui, auth } = useStores();
@@ -98,15 +88,22 @@ const AuthenticatedLayout: React.FC = ({ children }) => {
   const showInsights = !!matchPath(location.pathname, {
     path: matchDocumentInsights,
   });
+  const showComments =
+    !showInsights &&
+    !showHistory &&
+    ui.activeDocumentId &&
+    ui.commentsExpanded.includes(ui.activeDocumentId) &&
+    team?.getPreference(TeamPreference.Commenting);
 
   const sidebarRight = (
-    <AnimatePresence key={ui.activeDocumentId}>
-      {(showHistory || showInsights) && (
+    <AnimatePresence>
+      {(showHistory || showInsights || showComments) && (
         <Route path={`/doc/${slug}`}>
           <SidebarRight>
             <React.Suspense fallback={null}>
               {showHistory && <DocumentHistory />}
               {showInsights && <DocumentInsights />}
+              {showComments && <DocumentComments />}
             </React.Suspense>
           </SidebarRight>
         </Route>

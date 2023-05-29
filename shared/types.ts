@@ -34,6 +34,10 @@ export enum FileOperationState {
   Expired = "expired",
 }
 
+export enum MentionType {
+  User = "user",
+}
+
 export type PublicEnv = {
   URL: string;
   CDN_URL: string;
@@ -103,21 +107,37 @@ export enum UserPreference {
   RememberLastPath = "rememberLastPath",
   /** If web-style hand pointer should be used on interactive elements. */
   UseCursorPointer = "useCursorPointer",
+  /** Whether code blocks should show line numbers. */
   CodeBlockLineNumers = "codeBlockLineNumbers",
 }
 
 export type UserPreferences = { [key in UserPreference]?: boolean };
+
+export type CustomTheme = {
+  accent: string;
+  accentText: string;
+};
 
 export enum TeamPreference {
   /** Whether documents have a separate edit mode instead of seamless editing. */
   SeamlessEdit = "seamlessEdit",
   /** Whether to use team logo across the app for branding. */
   PublicBranding = "publicBranding",
-  /** Whether viewers should see download options */
+  /** Whether viewers should see download options. */
   ViewersCanExport = "viewersCanExport",
+  /** Whether users can comment on documents. */
+  Commenting = "commenting",
+  /** The custom theme for the team. */
+  CustomTheme = "customTheme",
 }
 
-export type TeamPreferences = { [key in TeamPreference]?: boolean };
+export type TeamPreferences = {
+  [TeamPreference.SeamlessEdit]?: boolean;
+  [TeamPreference.PublicBranding]?: boolean;
+  [TeamPreference.ViewersCanExport]?: boolean;
+  [TeamPreference.Commenting]?: boolean;
+  [TeamPreference.CustomTheme]?: Partial<CustomTheme>;
+};
 
 export enum NavigationNodeType {
   Collection = "collection",
@@ -139,4 +159,44 @@ export type NavigationNode = {
 export type CollectionSort = {
   field: string;
   direction: "asc" | "desc";
+};
+
+export enum NotificationEventType {
+  PublishDocument = "documents.publish",
+  UpdateDocument = "documents.update",
+  CreateCollection = "collections.create",
+  CreateComment = "comments.create",
+  MentionedInDocument = "documents.mentioned",
+  MentionedInComment = "comments.mentioned",
+  InviteAccepted = "emails.invite_accepted",
+  Onboarding = "emails.onboarding",
+  Features = "emails.features",
+  ExportCompleted = "emails.export_completed",
+}
+
+export enum NotificationChannelType {
+  App = "app",
+  Email = "email",
+  Chat = "chat",
+}
+
+export type NotificationSettings = {
+  [key in NotificationEventType]?:
+    | {
+        [key in NotificationChannelType]?: boolean;
+      }
+    | boolean;
+};
+
+export const NotificationEventDefaults = {
+  [NotificationEventType.PublishDocument]: false,
+  [NotificationEventType.UpdateDocument]: true,
+  [NotificationEventType.CreateCollection]: false,
+  [NotificationEventType.CreateComment]: true,
+  [NotificationEventType.MentionedInDocument]: true,
+  [NotificationEventType.MentionedInComment]: true,
+  [NotificationEventType.InviteAccepted]: true,
+  [NotificationEventType.Onboarding]: true,
+  [NotificationEventType.Features]: true,
+  [NotificationEventType.ExportCompleted]: true,
 };

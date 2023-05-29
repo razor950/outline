@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/react";
 import invariant from "invariant";
 import { observable, action, computed, autorun, runInAction } from "mobx";
 import { getCookie, setCookie, removeCookie } from "tiny-cookie";
-import { TeamPreferences, UserPreferences } from "@shared/types";
+import { CustomTheme, TeamPreferences, UserPreferences } from "@shared/types";
 import Storage from "@shared/utils/Storage";
 import { getCookieDomain, parseDomain } from "@shared/utils/domains";
 import RootStore from "~/stores/RootStore";
@@ -38,6 +38,7 @@ type Provider = {
 export type Config = {
   name?: string;
   logo?: string;
+  customTheme?: Partial<CustomTheme>;
   hostname?: string;
   providers: Provider[];
 };
@@ -127,7 +128,7 @@ export default class AuthStore {
     this.addPolicies(data.policies);
 
     if (this.token) {
-      setImmediate(() => this.fetch());
+      setTimeout(() => this.fetch(), 0);
     }
   }
 
@@ -222,9 +223,7 @@ export default class AuthStore {
   };
 
   @action
-  requestDelete = () => {
-    return client.post(`/users.requestDelete`);
-  };
+  requestDelete = () => client.post(`/users.requestDelete`);
 
   @action
   deleteUser = async (data: { code: string }) => {
@@ -269,7 +268,6 @@ export default class AuthStore {
     name?: string;
     avatarUrl?: string | null | undefined;
     sharing?: boolean;
-    collaborativeEditing?: boolean;
     defaultCollectionId?: string | null;
     subdomain?: string | null | undefined;
     allowedDomains?: string[] | null | undefined;
@@ -350,5 +348,6 @@ export default class AuthStore {
 
     // Tell the host application we logged out, if any – allows window cleanup.
     Desktop.bridge?.onLogout?.();
+    this.rootStore.logout();
   };
 }

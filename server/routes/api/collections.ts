@@ -150,8 +150,8 @@ router.post("collections.info", auth(), async (ctx: APIContext) => {
 
 router.post(
   "collections.import",
-  auth(),
   rateLimiter(RateLimiterStrategy.TenPerHour),
+  auth(),
   async (ctx: APIContext) => {
     const {
       attachmentId,
@@ -549,8 +549,8 @@ router.post(
 
 router.post(
   "collections.export",
-  auth(),
   rateLimiter(RateLimiterStrategy.TenPerHour),
+  auth(),
   async (ctx: APIContext) => {
     const { id } = ctx.request.body;
     const { format = FileOperationFormat.MarkdownZip } = ctx.request.body;
@@ -567,16 +567,16 @@ router.post(
     }).findByPk(id);
     authorize(user, "read", collection);
 
-    const fileOperation = await sequelize.transaction(async (transaction) => {
-      return collectionExporter({
+    const fileOperation = await sequelize.transaction(async (transaction) =>
+      collectionExporter({
         collection,
         user,
         team,
         format,
         ip: ctx.request.ip,
         transaction,
-      });
-    });
+      })
+    );
 
     ctx.body = {
       success: true,
@@ -589,8 +589,8 @@ router.post(
 
 router.post(
   "collections.export_all",
-  auth(),
   rateLimiter(RateLimiterStrategy.FivePerHour),
+  auth(),
   async (ctx: APIContext) => {
     const { format = FileOperationFormat.MarkdownZip } = ctx.request.body;
     const { user } = ctx.state.auth;
@@ -599,15 +599,15 @@ router.post(
 
     assertIn(format, Object.values(FileOperationFormat), "Invalid format");
 
-    const fileOperation = await sequelize.transaction(async (transaction) => {
-      return collectionExporter({
+    const fileOperation = await sequelize.transaction(async (transaction) =>
+      collectionExporter({
         user,
         team,
         format,
         ip: ctx.request.ip,
         transaction,
-      });
-    });
+      })
+    );
 
     ctx.body = {
       success: true,

@@ -78,15 +78,11 @@ const MenuItem = (
         >
           {selected !== undefined && (
             <>
-              {selected ? <CheckmarkIcon color="currentColor" /> : <Spacer />}
+              {selected ? <CheckmarkIcon /> : <Spacer />}
               &nbsp;
             </>
           )}
-          {icon && (
-            <MenuIconWrapper>
-              {React.cloneElement(icon, { color: "currentColor" })}
-            </MenuIconWrapper>
-          )}
+          {icon && <MenuIconWrapper>{icon}</MenuIconWrapper>}
           {children}
         </MenuAnchor>
       )}
@@ -147,13 +143,13 @@ export const MenuAnchorCSS = css<MenuAnchorProps>`
     &:hover,
     &:focus,
     &.focus-visible {
-      color: ${props.theme.white};
-      background: ${props.dangerous ? props.theme.danger : props.theme.primary};
+      color: ${props.theme.accentText};
+      background: ${props.dangerous ? props.theme.danger : props.theme.accent};
       box-shadow: none;
       cursor: var(--pointer);
 
       svg {
-        fill: ${props.theme.white};
+        fill: ${props.theme.accentText};
       }
     }
   }
@@ -163,13 +159,13 @@ export const MenuAnchorCSS = css<MenuAnchorProps>`
     props.$active &&
     !props.disabled &&
     `
-      color: ${props.theme.white};
-      background: ${props.dangerous ? props.theme.danger : props.theme.primary};
+      color: ${props.theme.accentText};
+      background: ${props.dangerous ? props.theme.danger : props.theme.accent};
       box-shadow: none;
       cursor: var(--pointer);
 
       svg {
-        fill: ${props.theme.white};
+        fill: ${props.theme.accentText};
       }
     `}
 

@@ -40,12 +40,14 @@ import { useTranslation } from "react-i18next";
 import { useMenuState, MenuButton, MenuItem } from "reakit/Menu";
 import styled, { useTheme } from "styled-components";
 import breakpoint from "styled-components-breakpoint";
+import { s } from "@shared/styles";
 import { colorPalette } from "@shared/utils/collections";
 import ContextMenu from "~/components/ContextMenu";
 import Flex from "~/components/Flex";
 import { LabelText } from "~/components/Input";
 import NudeButton from "~/components/NudeButton";
 import Text from "~/components/Text";
+import DelayedMount from "./DelayedMount";
 
 const style = {
   width: 30,
@@ -53,11 +55,7 @@ const style = {
 };
 
 const TwitterPicker = React.lazy(
-  () =>
-    import(
-      /* webpackChunkName: "twitter-picker" */
-      "react-color/lib/components/twitter/Twitter"
-    )
+  () => import("react-color/lib/components/twitter/Twitter")
 );
 
 export const icons = {
@@ -242,32 +240,36 @@ function IconPicker({ onOpen, onClose, icon, color, onChange }: Props) {
         aria-label={t("Choose icon")}
       >
         <Icons>
-          {Object.keys(icons).map((name, index) => {
-            return (
-              <MenuItem
-                key={name}
-                onClick={() => onChange(color, name)}
-                {...menu}
-              >
-                {(props) => (
-                  <IconButton
-                    style={
-                      {
-                        ...style,
-                        "--delay": `${index * 8}ms`,
-                      } as React.CSSProperties
-                    }
-                    {...props}
-                  >
-                    <Icon as={icons[name].component} color={color} size={30} />
-                  </IconButton>
-                )}
-              </MenuItem>
-            );
-          })}
+          {Object.keys(icons).map((name, index) => (
+            <MenuItem
+              key={name}
+              onClick={() => onChange(color, name)}
+              {...menu}
+            >
+              {(props) => (
+                <IconButton
+                  style={
+                    {
+                      ...style,
+                      "--delay": `${index * 8}ms`,
+                    } as React.CSSProperties
+                  }
+                  {...props}
+                >
+                  <Icon as={icons[name].component} color={color} size={30} />
+                </IconButton>
+              )}
+            </MenuItem>
+          ))}
         </Icons>
         <Colors>
-          <React.Suspense fallback={<Loading>{t("Loading")}…</Loading>}>
+          <React.Suspense
+            fallback={
+              <DelayedMount>
+                <Text>{t("Loading")}…</Text>
+              </DelayedMount>
+            }
+          >
             <ColorPicker
               color={color}
               onChange={(color) => onChange(color.hex, icon)}
@@ -320,7 +322,7 @@ const Icons = styled.div`
 `;
 
 const Button = styled(NudeButton)`
-  border: 1px solid ${(props) => props.theme.inputBorder};
+  border: 1px solid ${s("inputBorder")};
   width: 32px;
   height: 32px;
 `;
@@ -330,10 +332,6 @@ const IconButton = styled(NudeButton)`
   margin: 0px 6px 6px 0px;
   width: 30px;
   height: 30px;
-`;
-
-const Loading = styled(Text)`
-  padding: 16px;
 `;
 
 const ColorPicker = styled(TwitterPicker)`

@@ -1,13 +1,14 @@
 import * as React from "react";
 import styled from "styled-components";
+import { s } from "@shared/styles";
 import useBoolean from "~/hooks/useBoolean";
 import Initials from "./Initials";
 
 export interface IAvatar {
   avatarUrl: string | null;
-  color: string;
-  initial: string;
-  id: string;
+  color?: string;
+  initial?: string;
+  id?: string;
 }
 
 type Props = {
@@ -19,15 +20,16 @@ type Props = {
   showBorder?: boolean;
   onClick?: React.MouseEventHandler<HTMLImageElement>;
   className?: string;
+  style?: React.CSSProperties;
 };
 
 function Avatar(props: Props) {
-  const { icon, showBorder, model, ...rest } = props;
+  const { icon, showBorder, model, style, ...rest } = props;
   const src = props.src || model?.avatarUrl;
   const [error, handleError] = useBoolean(false);
 
   return (
-    <Relative>
+    <Relative style={style}>
       {src && !error ? (
         <CircleImg
           onError={handleError}
@@ -53,6 +55,7 @@ Avatar.defaultProps = {
 
 const Relative = styled.div`
   position: relative;
+  user-select: none;
   flex-shrink: 0;
 `;
 
@@ -61,8 +64,8 @@ const IconWrapper = styled.div`
   position: absolute;
   bottom: -2px;
   right: -2px;
-  background: ${(props) => props.theme.primary};
-  border: 2px solid ${(props) => props.theme.background};
+  background: ${s("accent")};
+  border: 2px solid ${s("background")};
   border-radius: 100%;
   width: 20px;
   height: 20px;

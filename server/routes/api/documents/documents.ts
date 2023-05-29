@@ -1,7 +1,6 @@
 import fs from "fs-extra";
 import invariant from "invariant";
 import Router from "koa-router";
-import { pick } from "lodash";
 import mime from "mime-types";
 import { Op, ScopeOptions, WhereOptions } from "sequelize";
 import { TeamPreference } from "@shared/types";
@@ -14,6 +13,7 @@ import documentMover from "@server/commands/documentMover";
 import documentPermanentDeleter from "@server/commands/documentPermanentDeleter";
 import documentUpdater from "@server/commands/documentUpdater";
 import { sequelize } from "@server/database/sequelize";
+import env from "@server/env";
 import {
   NotFoundError,
   InvalidRequestError,
@@ -41,13 +41,15 @@ import {
   presentCollection,
   presentDocument,
   presentPolicies,
+  presentPublicTeam,
+  presentUser,
 } from "@server/presenters";
 import { APIContext } from "@server/types";
 import { RateLimiterStrategy } from "@server/utils/RateLimiter";
+import { getFileFromRequest } from "@server/utils/koa";
 import { getTeamFromContext } from "@server/utils/passport";
 import slugify from "@server/utils/slugify";
 import { assertPresent } from "@server/validation";
-import env from "../../../env";
 import pagination from "../middlewares/pagination";
 import * as T from "./schema";
 
@@ -419,7 +421,7 @@ router.post(
         ? {
             document: serializedDocument,
             team: team?.getPreference(TeamPreference.PublicBranding)
-              ? pick(team, ["avatarUrl", "name"])
+              ? presentPublicTeam(team)
               : undefined,
             sharedTree:
               share && share.includeChildDocuments
@@ -430,6 +432,67 @@ router.post(
     ctx.body = {
       data,
       policies: isPublic ? undefined : presentPolicies(user, [document]),
+    };
+  }
+);
+
+router.post(
+  "documents.users",
+  auth(),
+  pagination(),
+  validate(T.DocumentsUsersSchema),
+  async (ctx: APIContext<T.DocumentsUsersReq>) => {
+    const { id, query } = ctx.input.body;
+    const actor = ctx.state.auth.user;
+    const { offset, limit } = ctx.state.pagination;
+    const document = await Document.findByPk(id, {
+      userId: actor.id,
+    });
+    authorize(actor, "read", document);
+
+    let users: User[] = [];
+    let total = 0;
+    let where: WhereOptions<User> = {
+      teamId: document.teamId,
+      suspendedAt: {
+        [Op.is]: null,
+      },
+    };
+
+    if (document.collectionId) {
+      const collection = await document.$get("collection");
+
+      if (!collection?.permission) {
+        const memberIds = await Collection.membershipUserIds(
+          document.collectionId
+        );
+        where = {
+          ...where,
+          id: {
+            [Op.in]: memberIds,
+          },
+        };
+      }
+
+      if (query) {
+        where = {
+          ...where,
+          name: {
+            [Op.iLike]: `%${query}%`,
+          },
+        };
+      }
+
+      [users, total] = await Promise.all([
+        User.findAll({ where, offset, limit }),
+        User.count({ where }),
+      ]);
+    }
+
+    ctx.body = {
+      pagination: { ...ctx.state.pagination, total },
+      data: users.map((user) => presentUser(user)),
+      policies: presentPolicies(actor, users),
     };
   }
 );
@@ -475,12 +538,17 @@ router.post(
     }
 
     if (contentType !== "application/json") {
+      // Override the extension for Markdown as it's incorrect in the mime-types
+      // library until a new release > 2.1.35
+      const extension =
+        contentType === "text/markdown" ? "md" : mime.extension(contentType);
+
       ctx.set("Content-Type", contentType);
       ctx.set(
         "Content-Disposition",
         `attachment; filename="${slugify(
           document.titleWithDefault
-        )}.${mime.extension(contentType)}"`
+        )}.${extension}"`
       );
       ctx.body = content;
       return;
@@ -514,9 +582,11 @@ router.post(
       document.collectionId = collectionId;
     }
 
-    const collection = await Collection.scope({
-      method: ["withMembership", user.id],
-    }).findByPk(document.collectionId);
+    const collection = document.collectionId
+      ? await Collection.scope({
+          method: ["withMembership", user.id],
+        }).findByPk(document.collectionId)
+      : undefined;
 
     // if the collectionId was provided in the request and isn't valid then it will
     // be caught as a 403 on the authorize call below. Otherwise we're checking here
@@ -825,7 +895,6 @@ router.post(
       text,
       fullWidth,
       publish,
-      lastRevision,
       templateId,
       collectionId,
       append,
@@ -848,13 +917,11 @@ router.post(
           collectionId,
           "collectionId is required to publish a draft without collection"
         );
-        collection = await Collection.findByPk(collectionId as string);
+        collection = await Collection.scope({
+          method: ["withMembership", user.id],
+        }).findByPk(collectionId!);
       }
       authorize(user, "publish", collection);
-    }
-
-    if (lastRevision && lastRevision !== document.revisionCount) {
-      throw InvalidRequestError("Document has changed since last revision");
     }
 
     collection = await sequelize.transaction(async (transaction) => {
@@ -872,6 +939,10 @@ router.post(
         transaction,
         ip: ctx.request.ip,
       });
+
+      if (!document.collectionId) {
+        return null;
+      }
 
       return await Collection.scope({
         method: ["withMembership", user.id],
@@ -1111,9 +1182,7 @@ router.post(
 
     const { collectionId, parentDocumentId, publish } = ctx.input.body;
 
-    const file = ctx.request.files
-      ? Object.values(ctx.request.files)[0]
-      : undefined;
+    const file = getFileFromRequest(ctx.request);
     if (!file) {
       throw InvalidRequestError("Request must include a file parameter");
     }
@@ -1151,12 +1220,12 @@ router.post(
       });
     }
 
-    const content = await fs.readFile(file.path);
+    const content = await fs.readFile(file.filepath);
     const document = await sequelize.transaction(async (transaction) => {
       const { text, title } = await documentImporter({
         user,
-        fileName: file.name,
-        mimeType: file.type,
+        fileName: file.originalFilename ?? file.newFilename,
+        mimeType: file.mimetype ?? "",
         content,
         ip: ctx.request.ip,
         transaction,
@@ -1239,8 +1308,8 @@ router.post(
       authorize(user, "read", templateDocument);
     }
 
-    const document = await sequelize.transaction(async (transaction) => {
-      return documentCreator({
+    const document = await sequelize.transaction(async (transaction) =>
+      documentCreator({
         title,
         text,
         publish,
@@ -1252,8 +1321,8 @@ router.post(
         editorVersion,
         ip: ctx.request.ip,
         transaction,
-      });
-    });
+      })
+    );
 
     document.collection = collection;
 

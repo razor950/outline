@@ -29,7 +29,6 @@ import {
   IsNumeric,
   IsDate,
 } from "sequelize-typescript";
-import MarkdownSerializer from "slate-md-serializer";
 import isUUID from "validator/lib/isUUID";
 import type { NavigationNode } from "@shared/types";
 import getTasks from "@shared/utils/getTasks";
@@ -49,8 +48,6 @@ import ParanoidModel from "./base/ParanoidModel";
 import Fix from "./decorators/Fix";
 import DocumentHelper from "./helpers/DocumentHelper";
 import Length from "./validators/Length";
-
-const serializer = new MarkdownSerializer();
 
 export const DOCUMENT_VERSION = 2;
 
@@ -270,7 +267,8 @@ class Document extends ParanoidModel {
       model.archivedAt ||
       model.template ||
       !model.publishedAt ||
-      !model.changed("title")
+      !model.changed("title") ||
+      !model.collectionId
     ) {
       return;
     }
@@ -289,12 +287,17 @@ class Document extends ParanoidModel {
 
   @AfterCreate
   static async addDocumentToCollectionStructure(model: Document) {
-    if (model.archivedAt || model.template || !model.publishedAt) {
+    if (
+      model.archivedAt ||
+      model.template ||
+      !model.publishedAt ||
+      !model.collectionId
+    ) {
       return;
     }
 
     return this.sequelize!.transaction(async (transaction: Transaction) => {
-      const collection = await Collection.findByPk(model.collectionId, {
+      const collection = await Collection.findByPk(model.collectionId!, {
         transaction,
         lock: transaction.LOCK.UPDATE,
       });
@@ -402,7 +405,7 @@ class Document extends ParanoidModel {
 
   @ForeignKey(() => Collection)
   @Column(DataType.UUID)
-  collectionId: string;
+  collectionId?: string | null;
 
   @HasMany(() => Revision)
   revisions: Revision[];
@@ -469,37 +472,6 @@ class Document extends ParanoidModel {
   }
 
   // instance methods
-
-  migrateVersion = () => {
-    let migrated = false;
-
-    // migrate from document version 0 -> 1
-    if (!this.version) {
-      // removing the title from the document text attribute
-      this.text = this.text.replace(/^#\s(.*)\n/, "");
-      this.version = 1;
-      migrated = true;
-    }
-
-    // migrate from document version 1 -> 2
-    if (this.version === 1) {
-      const nodes = serializer.deserialize(this.text);
-      this.text = serializer.serialize(nodes, {
-        version: 2,
-      });
-      this.version = 2;
-      migrated = true;
-    }
-
-    if (migrated) {
-      return this.save({
-        silent: true,
-        hooks: false,
-      });
-    }
-
-    return undefined;
-  };
 
   get titleWithDefault(): string {
     return this.title || "Untitled";
@@ -589,11 +561,19 @@ class Document extends ParanoidModel {
     return this.save(options);
   };
 
-  publish = async (userId: string, { transaction }: SaveOptions<Document>) => {
+  publish = async (
+    userId: string,
+    collectionId: string,
+    { transaction }: SaveOptions<Document>
+  ) => {
     // If the document is already published then calling publish should act like
     // a regular save
     if (this.publishedAt) {
       return this.save({ transaction });
+    }
+
+    if (!this.collectionId) {
+      this.collectionId = collectionId;
     }
 
     if (!this.template) {
@@ -621,10 +601,12 @@ class Document extends ParanoidModel {
     }
 
     await this.sequelize.transaction(async (transaction: Transaction) => {
-      const collection = await Collection.findByPk(this.collectionId, {
-        transaction,
-        lock: transaction.LOCK.UPDATE,
-      });
+      const collection = this.collectionId
+        ? await Collection.findByPk(this.collectionId, {
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+          })
+        : undefined;
 
       if (collection) {
         await collection.removeDocumentInStructure(this, { transaction });
@@ -644,10 +626,12 @@ class Document extends ParanoidModel {
   // to the archived area, where it can be subsequently restored.
   archive = async (userId: string) => {
     await this.sequelize.transaction(async (transaction: Transaction) => {
-      const collection = await Collection.findByPk(this.collectionId, {
-        transaction,
-        lock: transaction.LOCK.UPDATE,
-      });
+      const collection = this.collectionId
+        ? await Collection.findByPk(this.collectionId, {
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+          })
+        : undefined;
 
       if (collection) {
         await collection.removeDocumentInStructure(this, { transaction });
@@ -662,10 +646,12 @@ class Document extends ParanoidModel {
   // Restore an archived document back to being visible to the team
   unarchive = async (userId: string) => {
     await this.sequelize.transaction(async (transaction: Transaction) => {
-      const collection = await Collection.findByPk(this.collectionId, {
-        transaction,
-        lock: transaction.LOCK.UPDATE,
-      });
+      const collection = this.collectionId
+        ? await Collection.findByPk(this.collectionId, {
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+          })
+        : undefined;
 
       // check to see if the documents parent hasn't been archived also
       // If it has then restore the document to the collection root.
@@ -702,13 +688,14 @@ class Document extends ParanoidModel {
   };
 
   // Delete a document, archived or otherwise.
-  delete = (userId: string) => {
-    return this.sequelize.transaction(async (transaction: Transaction) => {
+  delete = (userId: string) =>
+    this.sequelize.transaction(async (transaction: Transaction) => {
       if (!this.archivedAt && !this.template && this.collectionId) {
         // delete any children and remove from the document structure
         const collection = await Collection.findByPk(this.collectionId, {
           transaction,
           lock: transaction.LOCK.UPDATE,
+          paranoid: false,
         });
         await collection?.deleteDocument(this, { transaction });
       } else {
@@ -733,11 +720,8 @@ class Document extends ParanoidModel {
       );
       return this;
     });
-  };
 
-  getTimestamp = () => {
-    return Math.round(new Date(this.updatedAt).getTime() / 1000);
-  };
+  getTimestamp = () => Math.round(new Date(this.updatedAt).getTime() / 1000);
 
   getSummary = () => {
     const plainText = DocumentHelper.toPlainText(this);

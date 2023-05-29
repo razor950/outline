@@ -21,7 +21,6 @@ const teamUpdater = async ({ params, user, team, ip }: TeamUpdaterProps) => {
     guestSignin,
     documentEmbeds,
     memberCollectionCreate,
-    collaborativeEditing,
     defaultCollectionId,
     defaultUserRole,
     inviteRequired,
@@ -55,9 +54,6 @@ const teamUpdater = async ({ params, user, team, ip }: TeamUpdaterProps) => {
   }
   if (defaultCollectionId !== undefined) {
     team.defaultCollectionId = defaultCollectionId;
-  }
-  if (collaborativeEditing !== undefined) {
-    team.collaborativeEditing = collaborativeEditing;
   }
   if (defaultUserRole !== undefined) {
     team.defaultUserRole = defaultUserRole;
@@ -107,7 +103,7 @@ const teamUpdater = async ({ params, user, team, ip }: TeamUpdaterProps) => {
   if (preferences) {
     for (const value of Object.values(TeamPreference)) {
       if (has(preferences, value)) {
-        team.setPreference(value, Boolean(preferences[value]));
+        team.setPreference(value, preferences[value]);
       }
     }
   }
@@ -119,9 +115,10 @@ const teamUpdater = async ({ params, user, team, ip }: TeamUpdaterProps) => {
       transaction,
     });
     if (changes) {
-      const data = changes.reduce((acc, curr) => {
-        return { ...acc, [curr]: team[curr] };
-      }, {});
+      const data = changes.reduce(
+        (acc, curr) => ({ ...acc, [curr]: team[curr] }),
+        {}
+      );
 
       await Event.create(
         {

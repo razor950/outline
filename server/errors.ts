@@ -175,6 +175,14 @@ export function GmailAccountCreationError(
   });
 }
 
+export function GitHubAccountCreationError(
+  message = "Account already created with this GitHub account"
+) {
+  return httpErrors(400, message, {
+    id: "github_account_creation",
+  });
+}
+
 export function OIDCMalformedUserInfoError(
   message = "User profile information malformed"
 ) {
