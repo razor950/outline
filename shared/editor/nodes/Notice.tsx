@@ -42,7 +42,8 @@ export default class Notice extends Node {
         {
           tag: "div.notice-block",
           preserveWhitespace: "full",
-          contentElement: "div.content",
+          contentElement: (node: HTMLDivElement) =>
+            node.querySelector("div.content") || node,
           getAttrs: (dom: HTMLDivElement) => ({
             style: dom.className.includes("tip")
               ? "tip"
@@ -70,6 +71,20 @@ export default class Notice extends Node {
               ? "warning"
               : dom.className.includes("success")
               ? "success"
+              : undefined,
+          }),
+        },
+        // Confluence parsing
+        {
+          tag: "div.confluence-information-macro",
+          preserveWhitespace: "full",
+          getAttrs: (dom: HTMLDivElement) => ({
+            style: dom.className.includes("confluence-information-macro-tip")
+              ? "success"
+              : dom.className.includes("confluence-information-macro-note")
+              ? "tip"
+              : dom.className.includes("confluence-information-macro-warning")
+              ? "warning"
               : undefined,
           }),
         },

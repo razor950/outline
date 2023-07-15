@@ -12,7 +12,10 @@ import {
   UserChangeToViewerDialog,
   UserSuspendDialog,
   UserChangeNameDialog,
-} from "~/components/UserRoleDialogs";
+} from "~/components/UserDialogs";
+import { actionToMenuItem } from "~/actions";
+import { deleteUserActionFactory } from "~/actions/definitions/users";
+import useActionContext from "~/hooks/useActionContext";
 import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
 import useToasts from "~/hooks/useToasts";
@@ -29,6 +32,9 @@ function UserMenu({ user }: Props) {
   });
   const can = usePolicy(user.id);
   const { showToast } = useToasts();
+  const context = useActionContext({
+    isContextMenu: true,
+  });
 
   const handlePromote = React.useCallback(
     (ev: React.SyntheticEvent) => {
@@ -99,7 +105,7 @@ function UserMenu({ user }: Props) {
     (ev: React.SyntheticEvent) => {
       ev.preventDefault();
       dialogs.openModal({
-        title: t("Suspend account"),
+        title: t("Suspend user"),
         isCentered: true,
         content: (
           <UserSuspendDialog user={user} onSubmit={dialogs.closeAllModals} />
@@ -110,9 +116,9 @@ function UserMenu({ user }: Props) {
   );
 
   const handleRevoke = React.useCallback(
-    (ev: React.SyntheticEvent) => {
+    async (ev: React.SyntheticEvent) => {
       ev.preventDefault();
-      users.delete(user);
+      await users.delete(user);
     },
     [users, user]
   );
@@ -137,9 +143,9 @@ function UserMenu({ user }: Props) {
   );
 
   const handleActivate = React.useCallback(
-    (ev: React.SyntheticEvent) => {
+    async (ev: React.SyntheticEvent) => {
       ev.preventDefault();
-      users.activate(user);
+      await users.activate(user);
     },
     [users, user]
   );
@@ -199,11 +205,14 @@ function UserMenu({ user }: Props) {
             },
             {
               type: "button",
-              title: `${t("Suspend account")}…`,
-              dangerous: true,
+              title: `${t("Suspend user")}…`,
               onClick: handleSuspend,
               visible: !user.isInvited && !user.isSuspended,
             },
+            {
+              type: "separator",
+            },
+            actionToMenuItem(deleteUserActionFactory(user.id), context),
           ]}
         />
       </ContextMenu>

@@ -40,8 +40,6 @@ type Props = {
   onFocus?: () => void;
   /** Callback when the editor is blurred */
   onBlur?: () => void;
-  /** Callback when the editor is clicked outside of */
-  onClickOutside?: (event: MouseEvent | TouchEvent) => void;
 };
 
 function CommentForm({
@@ -50,7 +48,6 @@ function CommentForm({
   onTyping,
   onFocus,
   onBlur,
-  onClickOutside,
   autoFocus,
   standalone,
   placeholder,
@@ -72,16 +69,18 @@ function CommentForm({
   const { comments } = useStores();
   const user = useCurrentUser();
 
-  useOnClickOutside(formRef, () => {
+  const reset = React.useCallback(async () => {
     const isEmpty = editorRef.current?.isEmpty() ?? true;
 
     if (isEmpty && thread?.isNew) {
       if (thread.id) {
         editor?.removeComment(thread.id);
       }
-      thread.delete();
+      await thread.delete();
     }
-  });
+  }, [editor, thread]);
+
+  useOnClickOutside(formRef, reset);
 
   const handleCreateComment = action(async (event: React.FormEvent) => {
     event.preventDefault();
@@ -124,7 +123,6 @@ function CommentForm({
 
     setData(undefined);
     setForceRender((s) => ++s);
-    setInputFocused(false);
 
     const comment = new Comment(
       {
@@ -148,6 +146,11 @@ function CommentForm({
     comment.isNew = false;
     comment.createdById = user.id;
     comment.createdBy = user;
+
+    // re-focus the comment editor
+    setTimeout(() => {
+      editorRef.current?.focusAtStart();
+    }, 0);
   });
 
   const handleChange = (
@@ -170,10 +173,11 @@ function CommentForm({
     }
   };
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     setData(undefined);
     setForceRender((s) => ++s);
     setInputFocused(false);
+    await reset();
   };
 
   const handleFocus = () => {

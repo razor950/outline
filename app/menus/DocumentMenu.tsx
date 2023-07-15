@@ -100,7 +100,7 @@ function DocumentMenu({
 
   const handleOpen = React.useCallback(async () => {
     if (!data && !loading) {
-      request();
+      await request();
     }
 
     if (onOpen) {
@@ -132,7 +132,7 @@ function DocumentMenu({
       ...collections.orderedData.reduce<MenuItem[]>((filtered, collection) => {
         const can = policies.abilities(collection.id);
 
-        if (can.update) {
+        if (can.createDocument) {
           filtered.push({
             type: "button",
             onClick: (ev) =>
@@ -325,7 +325,7 @@ function DocumentMenu({
                   checked={document.fullWidth}
                   onChange={(ev) => {
                     document.fullWidth = ev.currentTarget.checked;
-                    document.save();
+                    void document.save();
                   }}
                 />
               </Style>

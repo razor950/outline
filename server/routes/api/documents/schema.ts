@@ -8,7 +8,9 @@ const DocumentsSortParamsSchema = z.object({
   /** Specifies the attributes by which documents will be sorted in the list */
   sort: z
     .string()
-    .refine((val) => ["createdAt", "updatedAt", "index", "title"].includes(val))
+    .refine((val) =>
+      ["createdAt", "updatedAt", "publishedAt", "index", "title"].includes(val)
+    )
     .default("updatedAt"),
 
   /** Specifies the sort order with respect to sort field */
@@ -201,6 +203,9 @@ export const DocumentsUpdateSchema = BaseSchema.extend({
 
     /** Version of the API to be used */
     apiVersion: z.number().optional(),
+
+    /** Whether the editing session is complete */
+    done: z.boolean().optional(),
   }),
 }).refine((req) => !(req.body.append && !req.body.text), {
   message: "text is required while appending",

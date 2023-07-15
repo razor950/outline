@@ -19,10 +19,12 @@ import go from "refractor/lang/go";
 import graphql from "refractor/lang/graphql";
 import groovy from "refractor/lang/groovy";
 import haskell from "refractor/lang/haskell";
+import hcl from "refractor/lang/hcl";
 import ini from "refractor/lang/ini";
 import java from "refractor/lang/java";
 import javascript from "refractor/lang/javascript";
 import json from "refractor/lang/json";
+import jsx from "refractor/lang/jsx";
 import kotlin from "refractor/lang/kotlin";
 import lisp from "refractor/lang/lisp";
 import lua from "refractor/lang/lua";
@@ -41,6 +43,7 @@ import solidity from "refractor/lang/solidity";
 import sql from "refractor/lang/sql";
 import swift from "refractor/lang/swift";
 import toml from "refractor/lang/toml";
+import tsx from "refractor/lang/tsx";
 import typescript from "refractor/lang/typescript";
 import visualbasic from "refractor/lang/visual-basic";
 import yaml from "refractor/lang/yaml";
@@ -76,9 +79,11 @@ const DEFAULT_LANGUAGE = "javascript";
   graphql,
   groovy,
   haskell,
+  hcl,
   ini,
   java,
   javascript,
+  jsx,
   json,
   kotlin,
   lisp,
@@ -99,6 +104,7 @@ const DEFAULT_LANGUAGE = "javascript";
   swift,
   toml,
   typescript,
+  tsx,
   visualbasic,
   yaml,
   zig,
@@ -144,7 +150,8 @@ export default class CodeFence extends Node {
         {
           tag: ".code-block",
           preserveWhitespace: "full",
-          contentElement: "code",
+          contentElement: (node: HTMLElement) =>
+            node.querySelector("code") || node,
           getAttrs: (dom: HTMLDivElement) => ({
             language: dom.dataset.language,
           }),

@@ -13,7 +13,7 @@ import { colorPalette } from "@shared/utils/collections";
 import collectionExporter from "@server/commands/collectionExporter";
 import teamUpdater from "@server/commands/teamUpdater";
 import { sequelize } from "@server/database/sequelize";
-import { AuthorizationError, ValidationError } from "@server/errors";
+import { ValidationError } from "@server/errors";
 import auth from "@server/middlewares/authentication";
 import { rateLimiter } from "@server/middlewares/rateLimiter";
 import { transaction } from "@server/middlewares/transaction";
@@ -49,6 +49,7 @@ import {
   assertHexColor,
   assertIndexCharacters,
   assertCollectionPermission,
+  assertBoolean,
 } from "@server/validation";
 import pagination from "./middlewares/pagination";
 
@@ -148,15 +149,28 @@ router.post("collections.info", auth(), async (ctx: APIContext) => {
   };
 });
 
+router.post("collections.documents", auth(), async (ctx: APIContext) => {
+  const { id } = ctx.request.body;
+  assertPresent(id, "id is required");
+  const { user } = ctx.state.auth;
+  const collection = await Collection.scope({
+    method: ["withMembership", user.id],
+  }).findByPk(id);
+
+  authorize(user, "readDocument", collection);
+
+  ctx.body = {
+    data: collection.documentStructure || [],
+  };
+});
+
 router.post(
   "collections.import",
   rateLimiter(RateLimiterStrategy.TenPerHour),
   auth(),
   async (ctx: APIContext) => {
-    const {
-      attachmentId,
-      format = FileOperationFormat.MarkdownZip,
-    } = ctx.request.body;
+    const { attachmentId, format = FileOperationFormat.MarkdownZip } =
+      ctx.request.body;
     assertUuid(attachmentId, "attachmentId is required");
 
     const { user } = ctx.state.auth;
@@ -391,10 +405,6 @@ router.post(
       lock: transaction.LOCK.UPDATE,
     });
 
-    if (userId === actor.id) {
-      throw AuthorizationError("You cannot add yourself to a collection");
-    }
-
     if (permission) {
       assertCollectionPermission(permission);
     }
@@ -553,10 +563,14 @@ router.post(
   auth(),
   async (ctx: APIContext) => {
     const { id } = ctx.request.body;
-    const { format = FileOperationFormat.MarkdownZip } = ctx.request.body;
+    const {
+      format = FileOperationFormat.MarkdownZip,
+      includeAttachments = true,
+    } = ctx.request.body;
 
     assertUuid(id, "id is required");
     assertIn(format, Object.values(FileOperationFormat), "Invalid format");
+    assertBoolean(includeAttachments, "includeAttachments must be a boolean");
 
     const { user } = ctx.state.auth;
     const team = await Team.findByPk(user.teamId);
@@ -565,7 +579,7 @@ router.post(
     const collection = await Collection.scope({
       method: ["withMembership", user.id],
     }).findByPk(id);
-    authorize(user, "read", collection);
+    authorize(user, "export", collection);
 
     const fileOperation = await sequelize.transaction(async (transaction) =>
       collectionExporter({
@@ -573,6 +587,7 @@ router.post(
         user,
         team,
         format,
+        includeAttachments,
         ip: ctx.request.ip,
         transaction,
       })
@@ -592,18 +607,23 @@ router.post(
   rateLimiter(RateLimiterStrategy.FivePerHour),
   auth(),
   async (ctx: APIContext) => {
-    const { format = FileOperationFormat.MarkdownZip } = ctx.request.body;
+    const {
+      format = FileOperationFormat.MarkdownZip,
+      includeAttachments = true,
+    } = ctx.request.body;
     const { user } = ctx.state.auth;
     const team = await Team.findByPk(user.teamId);
     authorize(user, "createExport", team);
 
     assertIn(format, Object.values(FileOperationFormat), "Invalid format");
+    assertBoolean(includeAttachments, "includeAttachments must be a boolean");
 
     const fileOperation = await sequelize.transaction(async (transaction) =>
       collectionExporter({
         user,
         team,
         format,
+        includeAttachments,
         ip: ctx.request.ip,
         transaction,
       })
@@ -619,16 +639,8 @@ router.post(
 );
 
 router.post("collections.update", auth(), async (ctx: APIContext) => {
-  const {
-    id,
-    name,
-    description,
-    icon,
-    permission,
-    color,
-    sort,
-    sharing,
-  } = ctx.request.body;
+  const { id, name, description, icon, permission, color, sort, sharing } =
+    ctx.request.body;
 
   if (color) {
     assertHexColor(color, "Invalid hex value (please use format #FFFFFF)");
@@ -641,7 +653,7 @@ router.post("collections.update", auth(), async (ctx: APIContext) => {
   authorize(user, "update", collection);
 
   // we're making this collection have no default access, ensure that the
-  // current user has a read-write membership so that at least they can edit it
+  // current user has an admin membership so that at least they can manage it.
   if (
     permission !== CollectionPermission.ReadWrite &&
     collection.permission === CollectionPermission.ReadWrite
@@ -652,7 +664,7 @@ router.post("collections.update", auth(), async (ctx: APIContext) => {
         userId: user.id,
       },
       defaults: {
-        permission: CollectionPermission.ReadWrite,
+        permission: CollectionPermission.Admin,
         createdById: user.id,
       },
     });
@@ -750,12 +762,18 @@ router.post(
   auth(),
   pagination(),
   async (ctx: APIContext) => {
+    const { includeListOnly } = ctx.request.body;
     const { user } = ctx.state.auth;
     const collectionIds = await user.collectionIds();
-    const where: WhereOptions<Collection> = {
-      teamId: user.teamId,
-      id: collectionIds,
-    };
+    const where: WhereOptions<Collection> =
+      includeListOnly && user.isAdmin
+        ? {
+            teamId: user.teamId,
+          }
+        : {
+            teamId: user.teamId,
+            id: collectionIds,
+          };
     const collections = await Collection.scope({
       method: ["withMembership", user.id],
     }).findAll({

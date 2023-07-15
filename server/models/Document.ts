@@ -473,6 +473,25 @@ class Document extends ParanoidModel {
 
   // instance methods
 
+  /**
+   * Whether this document is considered active or not. A document is active if
+   * it has not been archived or deleted.
+   *
+   * @returns boolean
+   */
+  get isActive(): boolean {
+    return !this.archivedAt && !this.deletedAt;
+  }
+
+  /**
+   * Convenience method that returns whether this document is a draft.
+   *
+   * @returns boolean
+   */
+  get isDraft(): boolean {
+    return !this.publishedAt;
+  }
+
   get titleWithDefault(): string {
     return this.title || "Untitled";
   }
@@ -508,8 +527,9 @@ class Document extends ParanoidModel {
     const getChildDocumentIds = async (
       ...parentDocumentId: string[]
     ): Promise<string[]> => {
-      const childDocuments = await (this
-        .constructor as typeof Document).findAll({
+      const childDocuments = await (
+        this.constructor as typeof Document
+      ).findAll({
         attributes: ["id"],
         where: {
           parentDocumentId,
@@ -541,18 +561,19 @@ class Document extends ParanoidModel {
 
     // Helper to archive all child documents for a document
     const archiveChildren = async (parentDocumentId: string) => {
-      const childDocuments = await (this
-        .constructor as typeof Document).findAll({
+      const childDocuments = await (
+        this.constructor as typeof Document
+      ).findAll({
         where: {
           parentDocumentId,
         },
       });
-      childDocuments.forEach(async (child) => {
+      for (const child of childDocuments) {
         await archiveChildren(child.id);
         child.archivedAt = archivedAt;
         child.lastModifiedById = userId;
         await child.save(options);
-      });
+      }
     };
 
     await archiveChildren(this.id);
