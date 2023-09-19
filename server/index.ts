@@ -10,7 +10,7 @@ import Koa from "koa";
 import helmet from "koa-helmet";
 import logger from "koa-logger";
 import Router from "koa-router";
-import { uniq } from "lodash";
+import uniq from "lodash/uniq";
 import { AddressInfo } from "net";
 import stoppable from "stoppable";
 import throng from "throng";
@@ -128,16 +128,17 @@ async function start(id: number, disconnect: () => void) {
   });
   server.on("listening", () => {
     const address = server.address();
+    const port = (address as AddressInfo).port;
 
     Logger.info(
       "lifecycle",
-      `Listening on ${useHTTPS ? "https" : "http"}://localhost:${
-        (address as AddressInfo).port
+      `Listening on ${useHTTPS ? "https" : "http"}://localhost:${port} / ${
+        env.URL
       }`
     );
   });
 
-  server.listen(normalizedPortFlag || env.PORT || "3000");
+  server.listen(normalizedPortFlag || env.PORT);
   server.setTimeout(env.REQUEST_TIMEOUT);
 
   ShutdownHelper.add(

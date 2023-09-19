@@ -162,7 +162,7 @@ export class Environment {
    */
   @IsNumber()
   @IsOptional()
-  public PORT = this.toOptionalNumber(process.env.PORT);
+  public PORT = this.toOptionalNumber(process.env.PORT) ?? 3000;
 
   /**
    * Optional extra debugging. Comma separated
@@ -600,6 +600,24 @@ export class Environment {
     this.toOptionalNumber(process.env.MAXIMUM_IMPORT_SIZE) ?? 100000000,
     this.AWS_S3_UPLOAD_MAX_SIZE
   );
+
+  /**
+   * Iframely url
+   */
+  @IsOptional()
+  @IsUrl({
+    require_tld: false,
+    allow_underscores: true,
+    protocols: ["http", "https"],
+  })
+  public IFRAMELY_URL = process.env.IFRAMELY_URL ?? "https://iframe.ly";
+
+  /**
+   * Iframely API key
+   */
+  @IsOptional()
+  @CannotUseWithout("IFRAMELY_URL")
+  public IFRAMELY_API_KEY = this.toOptionalString(process.env.IFRAMELY_API_KEY);
 
   /**
    * The product name
