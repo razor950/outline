@@ -118,7 +118,7 @@ const FlexibleWrapper = styled.div`
   color: ${s("textSecondary")};
   overflow: hidden;
   display: flex;
-  gap: 8px;
+  gap: 6px;
 `;
 
 const Arrow = styled(ExpandedIcon)`
@@ -129,6 +129,7 @@ const Arrow = styled(ExpandedIcon)`
 const Label = styled.span`
   font-size: 15px;
   font-weight: 500;
+  color: ${s("text")};
 `;
 
 export default ToolbarMenu;
