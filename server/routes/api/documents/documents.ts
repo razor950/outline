@@ -10,6 +10,7 @@ import { TeamPreference } from "@shared/types";
 import { subtractDate } from "@shared/utils/date";
 import slugify from "@shared/utils/slugify";
 import documentCreator from "@server/commands/documentCreator";
+import documentDuplicator from "@server/commands/documentDuplicator";
 import documentImporter from "@server/commands/documentImporter";
 import documentLoader from "@server/commands/documentLoader";
 import documentMover from "@server/commands/documentMover";
@@ -399,9 +400,7 @@ router.post(
 
 router.post(
   "documents.info",
-  auth({
-    optional: true,
-  }),
+  auth({ optional: true }),
   validate(T.DocumentsInfoSchema),
   async (ctx: APIContext<T.DocumentsInfoReq>) => {
     const { id, shareId, apiVersion } = ctx.input.body;
@@ -506,9 +505,7 @@ router.post(
 router.post(
   "documents.export",
   rateLimiter(RateLimiterStrategy.FivePerMinute),
-  auth({
-    optional: true,
-  }),
+  auth({ optional: true }),
   validate(T.DocumentsExportSchema),
   async (ctx: APIContext<T.DocumentsExportReq>) => {
     const { id } = ctx.input.body;
@@ -768,9 +765,7 @@ router.post(
 
 router.post(
   "documents.search",
-  auth({
-    optional: true,
-  }),
+  auth({ optional: true }),
   pagination(),
   rateLimiter(RateLimiterStrategy.OneHundredPerMinute),
   validate(T.DocumentsSearchSchema),
@@ -890,46 +885,61 @@ router.post(
   auth({ member: true }),
   rateLimiter(RateLimiterStrategy.TwentyFivePerMinute),
   validate(T.DocumentsTemplatizeSchema),
+  transaction(),
   async (ctx: APIContext<T.DocumentsTemplatizeReq>) => {
     const { id } = ctx.input.body;
     const { user } = ctx.state.auth;
+    const { transaction } = ctx.state;
 
     const original = await Document.findByPk(id, {
       userId: user.id,
+      transaction,
     });
+
     authorize(user, "update", original);
 
-    const document = await Document.create({
-      editorVersion: original.editorVersion,
-      collectionId: original.collectionId,
-      teamId: original.teamId,
-      userId: user.id,
-      publishedAt: new Date(),
-      lastModifiedById: user.id,
-      createdById: user.id,
-      template: true,
-      emoji: original.emoji,
-      title: original.title,
-      text: original.text,
-    });
-    await Event.create({
-      name: "documents.create",
-      documentId: document.id,
-      collectionId: document.collectionId,
-      teamId: document.teamId,
-      actorId: user.id,
-      data: {
-        title: document.title,
+    const document = await Document.create(
+      {
+        editorVersion: original.editorVersion,
+        collectionId: original.collectionId,
+        teamId: original.teamId,
+        userId: user.id,
+        publishedAt: new Date(),
+        lastModifiedById: user.id,
+        createdById: user.id,
         template: true,
+        emoji: original.emoji,
+        title: original.title,
+        text: original.text,
       },
-      ip: ctx.request.ip,
-    });
+      {
+        transaction,
+      }
+    );
+    await Event.create(
+      {
+        name: "documents.create",
+        documentId: document.id,
+        collectionId: document.collectionId,
+        teamId: document.teamId,
+        actorId: user.id,
+        data: {
+          title: document.title,
+          template: true,
+        },
+        ip: ctx.request.ip,
+      },
+      {
+        transaction,
+      }
+    );
 
     // reload to get all of the data needed to present (user, collection etc)
     const reloaded = await Document.findByPk(document.id, {
       userId: user.id,
-      rejectOnEmpty: true,
+      transaction,
     });
+    invariant(reloaded, "document not found");
 
     ctx.body = {
       data: await presentDocument(reloaded),
@@ -954,6 +964,7 @@ router.post(
     const document = await Document.findByPk(id, {
       userId: user.id,
       includeState: true,
+      transaction,
     });
     collection = document?.collection;
     authorize(user, "update", document);
@@ -970,7 +981,7 @@ router.post(
         );
         collection = await Collection.scope({
           method: ["withMembership", user.id],
-        }).findByPk(collectionId!);
+        }).findByPk(collectionId!, { transaction });
       }
       authorize(user, "createDocument", collection);
     }
@@ -1012,6 +1023,68 @@ router.post(
 );
 
 router.post(
+  "documents.duplicate",
+  auth(),
+  validate(T.DocumentsDuplicateSchema),
+  transaction(),
+  async (ctx: APIContext<T.DocumentsDuplicateReq>) => {
+    const { transaction } = ctx.state;
+    const { id, title, publish, recursive, collectionId, parentDocumentId } =
+      ctx.input.body;
+    const { user } = ctx.state.auth;
+
+    const document = await Document.findByPk(id, {
+      userId: user.id,
+      transaction,
+    });
+    authorize(user, "read", document);
+
+    const collection = collectionId
+      ? await Collection.scope({
+          method: ["withMembership", user.id],
+        }).findByPk(collectionId, { transaction })
+      : document?.collection;
+
+    if (collection) {
+      authorize(user, "updateDocument", collection);
+    }
+
+    if (parentDocumentId) {
+      const parent = await Document.findByPk(parentDocumentId, {
+        userId: user.id,
+        transaction,
+      });
+      authorize(user, "update", parent);
+
+      if (!parent.publishedAt) {
+        throw InvalidRequestError("Cannot duplicate document inside a draft");
+      }
+    }
+
+    const response = await documentDuplicator({
+      user,
+      collection,
+      document,
+      title,
+      publish,
+      transaction,
+      recursive,
+      parentDocumentId,
+      ip: ctx.request.ip,
+    });
+
+    ctx.body = {
+      data: {
+        documents: await Promise.all(
+          response.map((document) => presentDocument(document))
+        ),
+      },
+      policies: presentPolicies(user, response),
+    };
+  }
+);
+
+router.post(
   "documents.move",
   auth(),
   validate(T.DocumentsMoveSchema),
@@ -1022,17 +1095,19 @@ router.post(
     const { user } = ctx.state.auth;
     const document = await Document.findByPk(id, {
       userId: user.id,
+      transaction,
     });
     authorize(user, "move", document);
 
     const collection = await Collection.scope({
       method: ["withMembership", user.id],
-    }).findByPk(collectionId);
+    }).findByPk(collectionId, { transaction });
     authorize(user, "updateDocument", collection);
 
     if (parentDocumentId) {
       const parent = await Document.findByPk(parentDocumentId, {
         userId: user.id,
+        transaction,
       });
       authorize(user, "update", parent);
 
@@ -1176,7 +1251,7 @@ router.post(
     });
     authorize(user, "unpublish", document);
 
-    const childDocumentIds = await document.getChildDocumentIds();
+    const childDocumentIds = await document.findAllChildDocumentIds();
     if (childDocumentIds.length > 0) {
       throw InvalidRequestError(
         "Cannot unpublish document with child documents"
@@ -1232,6 +1307,7 @@ router.post(
         id: collectionId,
         teamId: user.teamId,
       },
+      transaction,
     });
     authorize(user, "createDocument", collection);
     let parentDocument;
@@ -1242,6 +1318,7 @@ router.post(
           id: parentDocumentId,
           collectionId: collection.id,
         },
+        transaction,
       });
       authorize(user, "read", parentDocument, {
         collection,
@@ -1249,17 +1326,23 @@ router.post(
     }
 
     const content = await fs.readFile(file.filepath);
+    const fileName = file.originalFilename ?? file.newFilename;
+    const mimeType = file.mimetype ?? "";
+
     const { text, state, title, emoji } = await documentImporter({
       user,
-      fileName: file.originalFilename ?? file.newFilename,
-      mimeType: file.mimetype ?? "",
+      fileName,
+      mimeType,
       content,
       ip: ctx.request.ip,
       transaction,
     });
 
     const document = await documentCreator({
-      source: "import",
+      sourceMetadata: {
+        fileName,
+        mimeType,
+      },
       title,
       emoji,
       text,
@@ -1274,10 +1357,10 @@ router.post(
 
     document.collection = collection;
 
-    return (ctx.body = {
+    ctx.body = {
       data: await presentDocument(document),
       policies: presentPolicies(user, [document]),
-    });
+    };
   }
 );
 
@@ -1315,6 +1398,7 @@ router.post(
           id: collectionId,
           teamId: user.teamId,
         },
+        transaction,
       });
       authorize(user, "createDocument", collection);
     }
@@ -1338,6 +1422,7 @@ router.post(
     if (templateId) {
       templateDocument = await Document.findByPk(templateId, {
         userId: user.id,
+        transaction,
       });
       authorize(user, "read", templateDocument);
     }
@@ -1361,10 +1446,10 @@ router.post(
 
     document.collection = collection;
 
-    return (ctx.body = {
+    ctx.body = {
       data: await presentDocument(document),
       policies: presentPolicies(user, [document]),
-    });
+    };
   }
 );
 

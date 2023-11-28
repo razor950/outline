@@ -32,7 +32,9 @@ import GoogleSheets from "./GoogleSheets";
 import GoogleSlides from "./GoogleSlides";
 import Grist from "./Grist";
 import InVision from "./InVision";
+import Instagram from "./Instagram";
 import JSFiddle from "./JSFiddle";
+import Linkedin from "./Linkedin";
 import Loom from "./Loom";
 import Lucidchart from "./Lucidchart";
 import Marvel from "./Marvel";
@@ -285,6 +287,12 @@ const embeds: EmbedDescriptor[] = [
     component: Grist,
   }),
   new EmbedDescriptor({
+    title: "Instagram",
+    keywords: "post",
+    icon: <Img src="/images/instagram.png" alt="Instagram" />,
+    component: Instagram,
+  }),
+  new EmbedDescriptor({
     title: "InVision",
     keywords: "design prototype",
     defaultHidden: true,
@@ -297,6 +305,13 @@ const embeds: EmbedDescriptor[] = [
     defaultHidden: true,
     icon: <Img src="/images/jsfiddle.png" alt="JSFiddle" />,
     component: JSFiddle,
+  }),
+  new EmbedDescriptor({
+    title: "LinkedIn",
+    keywords: "post",
+    defaultHidden: true,
+    icon: <Img src="/images/linkedin.png" alt="LinkedIn" />,
+    component: Linkedin,
   }),
   new EmbedDescriptor({
     title: "Loom",

@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/react";
 import { EditorView } from "prosemirror-view";
+import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import FileHelper from "../lib/FileHelper";
 import uploadPlaceholderPlugin, {
@@ -19,8 +20,6 @@ export type Options = {
   onFileUploadStart?: () => void;
   /** Callback fired when the user completes a file upload */
   onFileUploadStop?: () => void;
-  /** Callback fired when a toast needs to be displayed */
-  onShowToast: (message: string) => void;
   /** Attributes to overwrite */
   attrs?: {
     /** Width to use when inserting image */
@@ -40,13 +39,8 @@ const insertFiles = function (
   files: File[],
   options: Options
 ): void {
-  const {
-    dictionary,
-    uploadFile,
-    onFileUploadStart,
-    onFileUploadStop,
-    onShowToast,
-  } = options;
+  const { dictionary, uploadFile, onFileUploadStart, onFileUploadStop } =
+    options;
 
   // okay, we have some dropped files and a handler – lets stop this
   // event going any further up the stack
@@ -87,11 +81,17 @@ const insertFiles = function (
     // happening in the background in parallel.
     uploadFile?.(upload.file)
       .then(async (src) => {
+        if (view.isDestroyed) {
+          return;
+        }
         if (upload.isImage) {
           const newImg = new Image();
           newImg.onload = () => {
             const result = findPlaceholder(view.state, upload.id);
             if (result === null) {
+              return;
+            }
+            if (view.isDestroyed) {
               return;
             }
 
@@ -120,6 +120,10 @@ const insertFiles = function (
 
           const [from, to] = result;
           const dimensions = await FileHelper.getVideoDimensions(upload.file);
+
+          if (view.isDestroyed) {
+            return;
+          }
 
           view.dispatch(
             view.state.tr
@@ -165,6 +169,10 @@ const insertFiles = function (
         // eslint-disable-next-line no-console
         console.error(error);
 
+        if (view.isDestroyed) {
+          return;
+        }
+
         // cleanup the placeholder if there is a failure
         view.dispatch(
           view.state.tr.setMeta(uploadPlaceholderPlugin, {
@@ -172,7 +180,7 @@ const insertFiles = function (
           })
         );
 
-        onShowToast(error.message || dictionary.fileUploadError);
+        toast.error(error.message || dictionary.fileUploadError);
       })
       .finally(() => {
         complete++;
