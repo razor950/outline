@@ -279,6 +279,7 @@
     "@types/node-fetch": "^2.6.9",
     "@types/nodemailer": "^6.4.14",
     "@types/passport-oauth2": "^1.4.15",
+    "@types/passport-github2": "^1.2.8",
     "@types/quoted-printable": "^1.0.0",
     "@types/randomstring": "^1.1.11",
     "@types/react": "^17.0.34",

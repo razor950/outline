@@ -1,56 +1,42 @@
-import passport from "@outlinewiki/koa-passport";
-import type { Context } from "koa";
+import passport, { Profile } from "@outlinewiki/koa-passport";
 import Router from "koa-router";
-import capitalize from "lodash/capitalize";
-import { Profile } from "passport";
-import { Strategy as GitHubStrategy } from "passport-github2";
-import { slugifyDomain } from "@shared/utils/domains";
+import { Strategy as GithubStrategy } from "passport-github2";
+import slugify from "@shared/utils/slugify";
 import accountProvisioner from "@server/commands/accountProvisioner";
 import env from "@server/env";
-import {
-  GitHubAccountCreationError,
-  TeamDomainRequiredError,
-} from "@server/errors";
 import passportMiddleware from "@server/middlewares/passport";
 import { User } from "@server/models";
 import { AuthenticationResult } from "@server/types";
 import {
-  StateStore,
-  getTeamFromContext,
   getClientFromContext,
+  getTeamFromContext,
 } from "@server/utils/passport";
 
 const router = new Router();
 const providerName = "github";
-const scopes = [
-  "user:email",
-];
+
+const scopes = ["read:org", "user:email"];
 
 type GitHubProfile = Profile & {
-  _json: {
-    email?: string;
-    avatar_url?: string;
-    company?: string;
-  };
+  emails: {
+    value: string;
+  }[];
 };
 
 if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) {
   passport.use(
-    new GitHubStrategy(
+    new GithubStrategy(
       {
         clientID: env.GITHUB_CLIENT_ID,
         clientSecret: env.GITHUB_CLIENT_SECRET,
         callbackURL: `${env.URL}/auth/github.callback`,
         passReqToCallback: true,
-        // @ts-expect-error StateStore
-        store: new StateStore(),
         scope: scopes,
       },
       async function (
-        ctx: Context,
+        req,
         accessToken: string,
         refreshToken: string,
-        params: { expires_in: number },
         profile: GitHubProfile,
         done: (
           err: Error | null,
@@ -58,68 +44,46 @@ if (env.GITHUB_CLIENT_ID && env.GITHUB_CLIENT_SECRET) {
           result?: AuthenticationResult
         ) => void
       ) {
-        try {
-          const company = profile._json.company;
-          const team = await getTeamFromContext(ctx);
-          const client = getClientFromContext(ctx);
+        const team = getTeamFromContext(req);
+        const client = getClientFromContext(req);
+        const email = profile.emails[0].value;
 
-          if (!company && !team) {
-            const userExists = await User.count({
-              where: { email: profile._json.email.toLowerCase() },
-            });
+        const domain = email.split("@")[1];
+        const subdomain = slugify(domain);
+        const name = profile.username ?? profile.displayName;
 
-            if (!userExists) {
-              throw GitHubAccountCreationError();
-            }
-
-            throw TeamDomainRequiredError();
-          }
-
-          const subdomain = company ? slugifyDomain(company) : "";
-          const teamName = capitalize(subdomain);
-          const avatarUrl = profile._json.avatar_url.replace("=s96-c", "=s128-c");
-
-          const result = await accountProvisioner({
-            ip: ctx.ip,
-            team: {
-              teamId: team?.id,
-              name: teamName,
-              domain: company,
-              subdomain,
-            },
-            client,
-            user: {
-              email: profile._json.email.toLowerCase(),
-              avatarUrl,
-              name: profile.displayName,
-            },
-            authenticationProvider: {
-              name: providerName,
-              providerId: company ?? "",
-            },
-            authentication: {
-              providerId: profile.id,
-              accessToken,
-              refreshToken,
-			  expiresIn: params.expires_in,
-              scopes,
-            },
-          });
-
-          return done(null, result.user, { ...result, client });
-        } catch (error) {
-          return done(error, null);
-        }
+        const result = await accountProvisioner({
+          ip: req.ip,
+          team: {
+            teamId: team?.id,
+            // https://github.com/outline/outline/pull/2388#discussion_r681120223
+            name: "Wiki",
+            domain,
+            subdomain,
+          },
+          user: {
+            name,
+            email: profile.emails[0].value,
+            avatarUrl: profile.photos?.[0].value,
+          },
+          authenticationProvider: {
+            name: providerName,
+            providerId: "github.com",
+          },
+          authentication: {
+            providerId: profile.id,
+            accessToken,
+            refreshToken,
+            expiresIn: 86400,
+            scopes,
+          },
+        });
+        return done(null, result.user, { ...result, client });
       }
     )
   );
-
-  router.get(
-    "github",
-    passport.authenticate(providerName)
-  );
-
-  router.get("github.callback", passportMiddleware(providerName));
+  router.get("github", passport.authenticate(providerName));
 }
+router.get("github.callback", passportMiddleware(providerName));
 
 export default router;
