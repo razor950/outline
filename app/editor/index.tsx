@@ -742,6 +742,7 @@ export class Editor extends React.PureComponent<
               <SelectionToolbar
                 rtl={isRTL}
                 readOnly={readOnly}
+                canUpdate={this.props.canUpdate}
                 canComment={this.props.canComment}
                 isTemplate={this.props.template === true}
                 onOpen={this.handleOpenSelectionToolbar}
@@ -762,7 +763,7 @@ export class Editor extends React.PureComponent<
             )}
             {this.widgets &&
               Object.values(this.widgets).map((Widget, index) => (
-                <Widget key={String(index)} rtl={isRTL} />
+                <Widget key={String(index)} rtl={isRTL} readOnly={readOnly} />
               ))}
           </Flex>
         </EditorContext.Provider>
