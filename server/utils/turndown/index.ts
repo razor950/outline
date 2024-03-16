@@ -5,9 +5,11 @@ import emptyLists from "./emptyLists";
 import emptyParagraph from "./emptyParagraph";
 import frames from "./frames";
 import images from "./images";
+import inlineLink from "./inlineLink";
 import sanitizeLists from "./sanitizeLists";
 import sanitizeTables from "./sanitizeTables";
 import underlines from "./underlines";
+import { inHtmlContext } from "./utils";
 
 /**
  * Turndown converts HTML to Markdown and is used in the importer code.
@@ -19,11 +21,14 @@ const service = new TurndownService({
   bulletListMarker: "-",
   headingStyle: "atx",
   codeBlockStyle: "fenced",
-  blankReplacement: (content, node) =>
-    node.nodeName === "P" ? "\n\n\\\n" : "",
+  blankReplacement: (_, node) =>
+    node.nodeName === "P" && !inHtmlContext(node as HTMLElement, "td, th")
+      ? "\n\n\\\n"
+      : "",
 })
   .remove(["script", "style", "title", "head"])
   .use(gfm)
+  .use(inlineLink)
   .use(emptyParagraph)
   .use(sanitizeTables)
   .use(sanitizeLists)

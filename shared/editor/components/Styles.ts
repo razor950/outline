@@ -403,6 +403,13 @@ li {
   position: relative;
 }
 
+iframe.embed {
+  width: 100%;
+  height: 400px;
+  border: 1px solid ${props.theme.embedBorder};
+  border-radius: 6px;
+}
+
 .image,
 .video {
   line-height: 0;
@@ -481,6 +488,12 @@ li {
   }
 }
 
+.attachment-replacement-uploading {
+  .widget {
+    opacity: 0.5;
+  }
+}
+
 .image-replacement-uploading {
   img {
     opacity: 0.5;
@@ -531,6 +544,10 @@ li {
 .ProseMirror-selectednode {
   outline: 2px solid
     ${props.readOnly ? "transparent" : props.theme.selected};
+
+  @media print {
+    outline: none;
+  }
 }
 
 /* Make sure li selections wrap around markers */
@@ -709,6 +726,7 @@ h6:not(.placeholder):before {
 
 .heading-actions {
   opacity: 0;
+  user-select: none;
   background: ${props.theme.background};
   margin-${props.rtl ? "right" : "left"}: -26px;
   flex-direction: ${props.rtl ? "row-reverse" : "row"};
@@ -780,13 +798,13 @@ h6 {
 }
 
 .comment-marker {
-  border-bottom: 2px solid ${transparentize(0.5, props.theme.brand.marine)};
+  border-bottom: 2px solid ${props.theme.commentMarkBackground};
   transition: background 100ms ease-in-out;
   border-radius: 2px;
 
   &:hover {
     ${props.readOnly ? "cursor: var(--pointer);" : ""}
-    background: ${transparentize(0.5, props.theme.brand.marine)};
+    background: ${props.theme.commentMarkBackground};
   }
 }
 
@@ -1126,18 +1144,23 @@ mark {
 }
 
 .code-block[data-language=mermaidjs] {
+  margin: 0.75em 0;
+
   pre {
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
-    margin-bottom: -12px;
+    margin-bottom: -20px;
     overflow: hidden;
   }
 
-  /* Hide code without display none so toolbar can still be positioned against it */
+  // Hide code without display none so toolbar can still be positioned against it
   &:not(.code-active) {
     height: ${props.staticHTML ? "auto" : "0"};
-    margin: -0.5em 0;
+    margin: -0.75em 0;
     overflow: hidden;
+
+    // Allows the margin to collapse correctly by moving div out of the flow
+    position: absolute;
   }
 }
 
@@ -1177,6 +1200,7 @@ mark {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 0.75em 0;
   min-height: 1.6em;
   background: ${props.theme.codeBackground};
   border-radius: 6px;
@@ -1487,6 +1511,7 @@ table {
 .folded-content,
 .folded-content + .mermaid-diagram-wrapper {
   display: none;
+  user-select: none;
 }
 
 @keyframes ProseMirror-cursor-blink {

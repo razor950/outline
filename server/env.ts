@@ -442,24 +442,23 @@ export class Environment {
   );
 
   /**
-  * GitHub OAuth2 client credentials. To enable authentication with GitHub.
-  */
+   * GitHub OAuth2 client credentials. To enable authentication with GitHub.
+   */
   @IsOptional()
   @CannotUseWithout("GITHUB_CLIENT_SECRET")
   public GITHUB_CLIENT_ID = this.toOptionalString(process.env.GITHUB_CLIENT_ID);
-  
+
   @IsOptional()
   @CannotUseWithout("GITHUB_CLIENT_ID")
   public GITHUB_CLIENT_SECRET = this.toOptionalString(
     process.env.GITHUB_CLIENT_SECRET
   );
-  
+
   @IsOptional()
   @CannotUseWithout("GITHUB_CLIENT_ID")
   public GITHUB_ORGANIZATION = this.toOptionalString(
     process.env.GITHUB_CLIENT_SECRET
   );
-  
 
   /**
    * OIDC client credentials. To enable authentication with any
@@ -518,6 +517,26 @@ export class Environment {
   public OIDC_USERINFO_URI = this.toOptionalString(
     process.env.OIDC_USERINFO_URI
   );
+
+  /**
+   * Disable autoredirect to the OIDC login page if there is only one
+   * authentication method and that method is OIDC.
+   */
+  @IsOptional()
+  @IsBoolean()
+  public OIDC_DISABLE_REDIRECT = this.toOptionalBoolean(
+    process.env.OIDC_DISABLE_REDIRECT
+  );
+
+  /**
+   * The OIDC logout endpoint.
+   */
+  @IsOptional()
+  @IsUrl({
+    require_tld: false,
+    allow_underscores: true,
+  })
+  public OIDC_LOGOUT_URI = this.toOptionalString(process.env.OIDC_LOGOUT_URI);
 
   /**
    * The OIDC profile field to use as the username. The default value is
@@ -582,7 +601,8 @@ export class Environment {
     this.toOptionalNumber(process.env.RATE_LIMITER_DURATION_WINDOW) ?? 60;
 
   /**
-   * @deprecated Set max allowed upload size for file attachments.
+   * Set max allowed upload size for file attachments.
+   * @deprecated Use FILE_STORAGE_UPLOAD_MAX_SIZE instead
    */
   @IsOptional()
   @IsNumber()
@@ -671,17 +691,40 @@ export class Environment {
   public FILE_STORAGE_UPLOAD_MAX_SIZE =
     this.toOptionalNumber(process.env.FILE_STORAGE_UPLOAD_MAX_SIZE) ??
     this.toOptionalNumber(process.env.AWS_S3_UPLOAD_MAX_SIZE) ??
-    100000000;
+    1000000;
+
+  /**
+   * Set max allowed upload size for document imports.
+   */
+  @IsNumber()
+  public FILE_STORAGE_IMPORT_MAX_SIZE =
+    this.toOptionalNumber(process.env.FILE_STORAGE_IMPORT_MAX_SIZE) ??
+    this.toOptionalNumber(process.env.MAXIMUM_IMPORT_SIZE) ??
+    this.toOptionalNumber(process.env.FILE_STORAGE_UPLOAD_MAX_SIZE) ??
+    1000000;
+
+  /**
+   * Set max allowed upload size for imports at workspace level.
+   */
+  @IsNumber()
+  public FILE_STORAGE_WORKSPACE_IMPORT_MAX_SIZE =
+    this.toOptionalNumber(process.env.FILE_STORAGE_WORKSPACE_IMPORT_MAX_SIZE) ??
+    this.toOptionalNumber(process.env.MAXIMUM_IMPORT_SIZE) ??
+    this.toOptionalNumber(process.env.FILE_STORAGE_UPLOAD_MAX_SIZE) ??
+    1000000;
 
   /**
    * Because imports can be much larger than regular file attachments and are
    * deleted automatically we allow an optional separate limit on the size of
    * imports.
+   *
+   * @deprecated Use `FILE_STORAGE_IMPORT_MAX_SIZE` or `FILE_STORAGE_WORKSPACE_IMPORT_MAX_SIZE` instead
    */
+  @IsOptional()
   @IsNumber()
-  public MAXIMUM_IMPORT_SIZE = Math.max(
-    this.toOptionalNumber(process.env.MAXIMUM_IMPORT_SIZE) ?? 100000000,
-    this.FILE_STORAGE_UPLOAD_MAX_SIZE
+  @Deprecated("Use FILE_STORAGE_IMPORT_MAX_SIZE instead")
+  public MAXIMUM_IMPORT_SIZE = this.toOptionalNumber(
+    process.env.MAXIMUM_IMPORT_SIZE
   );
 
   /**
@@ -784,6 +827,26 @@ export class Environment {
       throw new Error(
         `"${value}" could not be parsed as a boolean, must be "true" or "false"`
       );
+    }
+  }
+
+  /**
+   * Convert a string to an optional boolean. Supports the following:
+   *
+   * 0 = false
+   * 1 = true
+   * "true" = true
+   * "false" = false
+   * "" = undefined
+   *
+   * @param value The string to convert
+   * @returns A boolean or undefined
+   */
+  private toOptionalBoolean(value: string | undefined) {
+    try {
+      return value ? !!JSON.parse(value) : undefined;
+    } catch (err) {
+      return undefined;
     }
   }
 }

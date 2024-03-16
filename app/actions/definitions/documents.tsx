@@ -1,3 +1,4 @@
+import copy from "copy-to-clipboard";
 import invariant from "invariant";
 import {
   DownloadIcon,
@@ -19,23 +20,25 @@ import {
   ArchiveIcon,
   ShuffleIcon,
   HistoryIcon,
-  LightBulbIcon,
+  GraphIcon,
   UnpublishIcon,
   PublishIcon,
   CommentIcon,
   GlobeIcon,
+  CopyIcon,
 } from "outline-icons";
 import * as React from "react";
 import { toast } from "sonner";
 import { ExportContentType, TeamPreference } from "@shared/types";
+import MarkdownHelper from "@shared/utils/MarkdownHelper";
 import { getEventFiles } from "@shared/utils/files";
-import SharePopover from "~/scenes/Document/components/SharePopover";
 import DocumentDelete from "~/scenes/DocumentDelete";
 import DocumentMove from "~/scenes/DocumentMove";
 import DocumentPermanentDelete from "~/scenes/DocumentPermanentDelete";
 import DocumentPublish from "~/scenes/DocumentPublish";
 import DocumentTemplatizeDialog from "~/components/DocumentTemplatizeDialog";
 import DuplicateDialog from "~/components/DuplicateDialog";
+import SharePopover from "~/components/Sharing";
 import { createAction } from "~/actions";
 import { DocumentSection } from "~/actions/sections";
 import env from "~/env";
@@ -47,6 +50,7 @@ import {
   newDocumentPath,
   searchPath,
   documentPath,
+  urlify,
 } from "~/utils/routeHelpers";
 
 export const openDocument = createAction({
@@ -195,7 +199,7 @@ export const publishDocument = createAction({
     }
     const document = stores.documents.get(activeDocumentId);
     return (
-      !!document?.isDraft && stores.policies.abilities(activeDocumentId).update
+      !!document?.isDraft && stores.policies.abilities(activeDocumentId).publish
     );
   },
   perform: async ({ activeDocumentId, stores, t }) => {
@@ -220,7 +224,6 @@ export const publishDocument = createAction({
     } else if (document) {
       stores.dialogs.openModal({
         title: t("Publish document"),
-        isCentered: true,
         content: <DocumentPublish document={document} />,
       });
     }
@@ -248,17 +251,13 @@ export const unpublishDocument = createAction({
       return;
     }
 
-    try {
-      await document.unpublish();
+    await document.unpublish();
 
-      toast.success(
-        t("Unpublished {{ documentName }}", {
-          documentName: document.noun,
-        })
-      );
-    } catch (err) {
-      toast.error(err.message);
-    }
+    toast.success(
+      t("Unpublished {{ documentName }}", {
+        documentName: document.noun,
+      })
+    );
   },
 });
 
@@ -285,9 +284,7 @@ export const subscribeDocument = createAction({
     }
 
     const document = stores.documents.get(activeDocumentId);
-
     await document?.subscribe();
-
     toast.success(t("Subscribed to document notifications"));
   },
 });
@@ -341,14 +338,12 @@ export const shareDocument = createAction({
 
     stores.dialogs.openModal({
       title: t("Share this document"),
-      isCentered: true,
       content: (
         <SharePopover
           document={document}
           share={share}
           sharedParent={sharedParent}
           onRequestClose={stores.dialogs.closeAllModals}
-          hideTitle
           visible
         />
       ),
@@ -393,7 +388,7 @@ export const downloadDocumentAsPDF = createAction({
 
     const id = toast.loading(`${t("Exporting")}…`);
     const document = stores.documents.get(activeDocumentId);
-    document
+    return document
       ?.download(ExportContentType.Pdf)
       .finally(() => id && toast.dismiss(id));
   },
@@ -432,6 +427,47 @@ export const downloadDocument = createAction({
   ],
 });
 
+export const copyDocumentAsMarkdown = createAction({
+  name: ({ t }) => t("Copy as Markdown"),
+  section: DocumentSection,
+  keywords: "clipboard",
+  visible: ({ activeDocumentId }) => !!activeDocumentId,
+  perform: ({ stores, activeDocumentId, t }) => {
+    const document = activeDocumentId
+      ? stores.documents.get(activeDocumentId)
+      : undefined;
+    if (document) {
+      copy(MarkdownHelper.toMarkdown(document));
+      toast.success(t("Markdown copied to clipboard"));
+    }
+  },
+});
+
+export const copyDocumentLink = createAction({
+  name: ({ t }) => t("Copy link"),
+  section: DocumentSection,
+  keywords: "clipboard",
+  visible: ({ activeDocumentId }) => !!activeDocumentId,
+  perform: ({ stores, activeDocumentId, t }) => {
+    const document = activeDocumentId
+      ? stores.documents.get(activeDocumentId)
+      : undefined;
+    if (document) {
+      copy(urlify(documentPath(document)));
+      toast.success(t("Link copied to clipboard"));
+    }
+  },
+});
+
+export const copyDocument = createAction({
+  name: ({ t }) => t("Copy"),
+  analyticsName: "Copy document",
+  section: DocumentSection,
+  icon: <CopyIcon />,
+  keywords: "clipboard",
+  children: [copyDocumentLink, copyDocumentAsMarkdown],
+});
+
 export const duplicateDocument = createAction({
   name: ({ t, isContextMenu }) =>
     isContextMenu ? t("Duplicate") : t("Duplicate document"),
@@ -440,7 +476,7 @@ export const duplicateDocument = createAction({
   icon: <DuplicateIcon />,
   keywords: "copy",
   visible: ({ activeDocumentId, stores }) =>
-    !!activeDocumentId && stores.policies.abilities(activeDocumentId).update,
+    !!activeDocumentId && stores.policies.abilities(activeDocumentId).duplicate,
   perform: async ({ activeDocumentId, t, stores }) => {
     if (!activeDocumentId) {
       return;
@@ -451,7 +487,6 @@ export const duplicateDocument = createAction({
 
     stores.dialogs.openModal({
       title: t("Copy document"),
-      isCentered: true,
       content: (
         <DuplicateDialog
           document={document}
@@ -499,17 +534,13 @@ export const pinDocumentToCollection = createAction({
       return;
     }
 
-    try {
-      const document = stores.documents.get(activeDocumentId);
-      await document?.pin(document.collectionId);
+    const document = stores.documents.get(activeDocumentId);
+    await document?.pin(document.collectionId);
 
-      const collection = stores.collections.get(activeCollectionId);
+    const collection = stores.collections.get(activeCollectionId);
 
-      if (!collection || !location.pathname.startsWith(collection?.url)) {
-        toast.success(t("Pinned to collection"));
-      }
-    } catch (err) {
-      toast.error(err.message);
+    if (!collection || !location.pathname.startsWith(collection?.url)) {
+      toast.success(t("Pinned to collection"));
     }
   },
 });
@@ -542,14 +573,10 @@ export const pinDocumentToHome = createAction({
     }
     const document = stores.documents.get(activeDocumentId);
 
-    try {
-      await document?.pin();
+    await document?.pin();
 
-      if (location.pathname !== homePath()) {
-        toast.success(t("Pinned to home"));
-      }
-    } catch (err) {
-      toast.error(err.message);
+    if (location.pathname !== homePath()) {
+      toast.success(t("Pinned to home"));
     }
   },
 });
@@ -600,21 +627,16 @@ export const importDocument = createAction({
     input.onchange = async (ev) => {
       const files = getEventFiles(ev);
 
-      try {
-        const file = files[0];
-        const document = await documents.import(
-          file,
-          activeDocumentId,
-          activeCollectionId,
-          {
-            publish: true,
-          }
-        );
-        history.push(document.url);
-      } catch (err) {
-        toast.error(err.message);
-        throw err;
-      }
+      const file = files[0];
+      const document = await documents.import(
+        file,
+        activeDocumentId,
+        activeCollectionId,
+        {
+          publish: true,
+        }
+      );
+      history.push(document.url);
     };
 
     input.click();
@@ -648,7 +670,6 @@ export const createTemplate = createAction({
 
     stores.dialogs.openModal({
       title: t("Create template"),
-      isCentered: true,
       content: <DocumentTemplatizeDialog documentId={activeDocumentId} />,
     });
   },
@@ -707,7 +728,6 @@ export const moveDocument = createAction({
         title: t("Move {{ documentType }}", {
           documentType: document.noun,
         }),
-        isCentered: true,
         content: <DocumentMove document={document} />,
       });
     }
@@ -739,7 +759,7 @@ export const archiveDocument = createAction({
 });
 
 export const deleteDocument = createAction({
-  name: ({ t }) => t("Delete"),
+  name: ({ t }) => `${t("Delete")}…`,
   analyticsName: "Delete document",
   section: DocumentSection,
   icon: <TrashIcon />,
@@ -761,7 +781,6 @@ export const deleteDocument = createAction({
         title: t("Delete {{ documentName }}", {
           documentName: document.noun,
         }),
-        isCentered: true,
         content: (
           <DocumentDelete
             document={document}
@@ -796,7 +815,6 @@ export const permanentlyDeleteDocument = createAction({
         title: t("Permanently delete {{ documentName }}", {
           documentName: document.noun,
         }),
-        isCentered: true,
         content: (
           <DocumentPermanentDelete
             document={document}
@@ -855,7 +873,7 @@ export const openDocumentInsights = createAction({
   name: ({ t }) => t("Insights"),
   analyticsName: "Open document insights",
   section: DocumentSection,
-  icon: <LightBulbIcon />,
+  icon: <GraphIcon />,
   visible: ({ activeDocumentId, stores }) => {
     const can = stores.policies.abilities(activeDocumentId ?? "");
     const document = activeDocumentId
@@ -889,6 +907,8 @@ export const rootDocumentActions = [
   deleteDocument,
   importDocument,
   downloadDocument,
+  copyDocumentLink,
+  copyDocumentAsMarkdown,
   starDocument,
   unstarDocument,
   publishDocument,
@@ -905,4 +925,5 @@ export const rootDocumentActions = [
   openDocumentComments,
   openDocumentHistory,
   openDocumentInsights,
+  shareDocument,
 ];

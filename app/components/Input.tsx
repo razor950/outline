@@ -8,10 +8,14 @@ import Flex from "~/components/Flex";
 import Text from "~/components/Text";
 import { undraggableOnDesktop } from "~/styles";
 
-const RealTextarea = styled.textarea<{ hasIcon?: boolean }>`
+export const NativeTextarea = styled.textarea<{
+  hasIcon?: boolean;
+  hasPrefix?: boolean;
+}>`
   border: 0;
   flex: 1;
-  padding: 8px 12px 8px ${(props) => (props.hasIcon ? "8px" : "12px")};
+  padding: 8px 12px 8px
+    ${(props) => (props.hasPrefix ? 0 : props.hasIcon ? "8px" : "12px")};
   outline: none;
   background: none;
   color: ${s("text")};
@@ -19,13 +23,18 @@ const RealTextarea = styled.textarea<{ hasIcon?: boolean }>`
   &:disabled,
   &::placeholder {
     color: ${s("placeholder")};
+    opacity: 1;
   }
 `;
 
-const RealInput = styled.input<{ hasIcon?: boolean }>`
+export const NativeInput = styled.input<{
+  hasIcon?: boolean;
+  hasPrefix?: boolean;
+}>`
   border: 0;
   flex: 1;
-  padding: 8px 12px 8px ${(props) => (props.hasIcon ? "8px" : "12px")};
+  padding: 8px 12px 8px
+    ${(props) => (props.hasPrefix ? 0 : props.hasIcon ? "8px" : "12px")};
   outline: none;
   background: none;
   color: ${s("text")};
@@ -39,6 +48,7 @@ const RealInput = styled.input<{ hasIcon?: boolean }>`
   &:disabled,
   &::placeholder {
     color: ${s("placeholder")};
+    opacity: 1;
   }
 
   &:-webkit-autofill,
@@ -56,7 +66,7 @@ const RealInput = styled.input<{ hasIcon?: boolean }>`
   `};
 `;
 
-const Wrapper = styled.div<{
+export const Wrapper = styled.div<{
   flex?: boolean;
   short?: boolean;
   minHeight?: number;
@@ -111,9 +121,11 @@ export const LabelText = styled.div`
   display: inline-block;
 `;
 
-export type Props = React.InputHTMLAttributes<
-  HTMLInputElement | HTMLTextAreaElement
-> & {
+export interface Props
+  extends Omit<
+    React.InputHTMLAttributes<HTMLInputElement | HTMLTextAreaElement>,
+    "prefix"
+  > {
   type?: "text" | "email" | "checkbox" | "search" | "textarea";
   labelHidden?: boolean;
   label?: string;
@@ -121,6 +133,9 @@ export type Props = React.InputHTMLAttributes<
   short?: boolean;
   margin?: string | number;
   error?: string;
+  /** Optional component that appears inside the input before the textarea and any icon */
+  prefix?: React.ReactNode;
+  /** Optional icon that appears inside the input before the textarea */
   icon?: React.ReactNode;
   /** Like autoFocus, but also select any text in the input */
   autoSelect?: boolean;
@@ -130,7 +145,7 @@ export type Props = React.InputHTMLAttributes<
   ) => unknown;
   onFocus?: (ev: React.SyntheticEvent) => unknown;
   onBlur?: (ev: React.SyntheticEvent) => unknown;
-};
+}
 
 function Input(
   props: Props,
@@ -184,6 +199,7 @@ function Input(
     className,
     short,
     flex,
+    prefix,
     labelHidden,
     onFocus,
     onBlur,
@@ -204,9 +220,10 @@ function Input(
             wrappedLabel
           ))}
         <Outline focused={focused} margin={margin}>
+          {prefix}
           {icon && <IconWrapper>{icon}</IconWrapper>}
           {type === "textarea" ? (
-            <RealTextarea
+            <NativeTextarea
               ref={mergeRefs([
                 internalRef,
                 ref as React.RefObject<HTMLTextAreaElement>,
@@ -215,10 +232,11 @@ function Input(
               onFocus={handleFocus}
               onKeyDown={handleKeyDown}
               hasIcon={!!icon}
+              hasPrefix={!!prefix}
               {...rest}
             />
           ) : (
-            <RealInput
+            <NativeInput
               ref={mergeRefs([
                 internalRef,
                 ref as React.RefObject<HTMLInputElement>,
@@ -227,6 +245,7 @@ function Input(
               onFocus={handleFocus}
               onKeyDown={handleKeyDown}
               hasIcon={!!icon}
+              hasPrefix={!!prefix}
               type={type}
               {...rest}
             />
@@ -236,9 +255,9 @@ function Input(
       </label>
       {error && (
         <TextWrapper>
-          <StyledText type="danger" size="xsmall">
+          <Text type="danger" size="xsmall">
             {error}
-          </StyledText>
+          </Text>
         </TextWrapper>
       )}
     </Wrapper>
@@ -249,10 +268,6 @@ export const TextWrapper = styled.span`
   min-height: 16px;
   display: block;
   margin-top: -16px;
-`;
-
-export const StyledText = styled(Text)`
-  margin-bottom: 0;
 `;
 
 export default React.forwardRef(Input);
